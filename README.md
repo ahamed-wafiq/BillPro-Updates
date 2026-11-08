@@ -1,30 +1,20 @@
-# BillPro — Android billing starter
+# BillPro Android Application
 
-BillPro is an original Android Studio starter project for an offline-first billing app. It is not affiliated with Billculator or any other billing app.
+Official repository for **BillPro** — Modern offline-first Android billing, inventory management, and GitHub in-app release update system.
 
-## Included
-- Kotlin + Jetpack Compose dark UI
-- Room entities and DAO scaffolding for products, customers, invoices, invoice lines, and cashbook entries
-- GST calculation helper for intra-state CGST/SGST and inter-state IGST
-- Basic dashboard with sample cards
-- Bluetooth ESC/POS printer helper scaffold
-- Cloud-sync interface placeholder
+## Key Features
+- **Modern Jetpack Compose UI**: Signature yellow (`#FFC928`), black, and white design system with floating bottom navigation.
+- **Inventory Ledger**: Complete stock movement tracking (restocks, sales, returns, wastage, adjustments) with per-item ledger history.
+- **GST Invoicing**: Instant invoice generation with CGST/SGST/IGST breakdown, PDF export, and ESC/POS thermal printing.
+- **Customer Ledger**: Credit accounts, purchase history, and balance tracking.
+- **Cashbook & Payments**: Daily income and expense management with 3-column financial analytics (Revenue, Expenses, Net Profit).
+- **Isolated Multi-Tenant Architecture**: Business ID isolation for all local Room database records.
+- **GitHub In-App Updater**: Client devices automatically check for and install releases from GitHub Releases with SHA-256 verification.
 
-## Open and build
-1. Install Android Studio (a recent stable version).
-2. Open this `BillPro` folder.
-3. Allow Gradle sync and install the Android SDK requested by Android Studio.
-4. Run the `app` configuration on an Android device or emulator.
-
-This starter has not been compiled or tested in this environment. Resolve any Gradle/SDK issues Android Studio reports before use.
-
-## Important production work still needed
-- Complete create/edit screens and connect them to Room repositories.
-- Add database migrations and robust backup/restore.
-- Implement printer discovery, runtime permissions, and test against your exact printer model.
-- Choose and implement a cloud backend (for example Firebase or your own API), authentication, conflict resolution, and encryption.
-- Verify GST invoice requirements with a qualified tax professional.
-- Add automated tests, accessibility checks, and release signing.
-
-## GST note
-The sample calculator assumes prices are tax-exclusive and takes a caller-provided GST percentage. Tax treatment can differ by product, transaction, and legal circumstances. Do not rely on it as tax advice.
+## Technology Stack
+- **Language**: Kotlin 2.0+
+- **UI Toolkit**: Jetpack Compose + Material 3
+- **Local Database**: Room 2.6+ with schema migrations
+- **Architecture**: MVVM with Kotlin Coroutines & Flow
+- **Build System**: Gradle 8.9 + Android Gradle Plugin 8.7.3
+- **Target SDK**: Android 15 (API 35), Min SDK: Android 8.0 (API 26)
