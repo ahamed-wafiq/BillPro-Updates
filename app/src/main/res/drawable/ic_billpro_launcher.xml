@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Dark Background with rounded shape -->
+    <path
+        android:fillColor="#141923"
+        android:pathData="M18,0 L90,0 A18,18 0 0,1 108,18 L108,90 A18,18 0 0,1 90,108 L18,108 A18,18 0 0,1 0,90 L0,18 A18,18 0 0,1 18,0 Z" />
+    
+    <!-- Gold Border Ring -->
+    <path
+        android:strokeColor="#F3BA4F"
+        android:strokeWidth="2.5"
+        android:pathData="M22,6 L86,6 A16,16 0 0,1 102,22 L102,86 A16,16 0 0,1 86,102 L22,102 A16,16 0 0,1 6,86 L6,22 A16,16 0 0,1 22,6 Z" />
+
+    <!-- Receipt Graphic Body -->
+    <path
+        android:fillColor="#1E2536"
+        android:pathData="M30,24 L78,24 A4,4 0 0,1 82,28 L82,82 L74,78 L66,82 L58,78 L50,82 L42,78 L34,82 L26,78 L26,28 A4,4 0 0,1 30,24 Z" />
+
+    <!-- Receipt Lines -->
+    <path
+        android:fillColor="#F3BA4F"
+        android:pathData="M36,36 L72,36 A2,2 0 0,1 72,40 L36,40 A2,2 0 0,1 36,36 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M36,46 L62,46 A2,2 0 0,1 62,50 L36,50 A2,2 0 0,1 36,46 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M36,56 L54,56 A2,2 0 0,1 54,60 L36,60 A2,2 0 0,1 36,56 Z" />
+
+    <!-- Checkmark Badge -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M72,60 A14,14 0 1,1 72,88 A14,14 0 1,1 72,60 Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M65,74 L70,79 L80,69" />
+</vector>
+

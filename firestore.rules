@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: checks if user is logged into Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: checks if user document matches the authenticated UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper: validates that the caller owns the specified businessId
+    function isBusinessAuthorized(bizId) {
+      return isAuthenticated() && (
+        request.auth.token.businessId == bizId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.businessId == bizId
+      );
+    }
+
+    // 1. User Account Document: users/{userId}
+    match /users/{userId} {
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read, update: if isOwner(userId);
+      allow delete: if false; // Disallow deletion from client
+    }
+
+    // 2. Business Root & Sub-collections: businesses/{businessId}
+    match /businesses/{bizId} {
+      // Creation allowed during new business registration
+      allow create: if isAuthenticated();
+      // Read & update restricted strictly to the verified business owner
+      allow read, update: if isBusinessAuthorized(bizId);
+      allow delete: if false;
+
+      // Isolated Sub-collections: products, customers, invoices, cashbook, settings
+      match /{subcollection}/{docId} {
+        allow read, write: if isBusinessAuthorized(bizId);
+      }
+    }
+  }
+}
+

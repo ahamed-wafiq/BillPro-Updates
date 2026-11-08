@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "304564575277",
+    "project_id": "billpro-c5dd2",
+    "storage_bucket": "billpro-c5dd2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:304564575277:android:cf8bfbdc6b4af571332ca4",
+        "android_client_info": {
+          "package_name": "com.billpro.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4L9nf3xqqyq7RyVqV-Zi4fr3i9LOWvno"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
