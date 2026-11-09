@@ -205,6 +205,13 @@ fun InvoicesScreen(
                         invoice = invoice,
                         customerName = customer?.name ?: "Walk-in Customer",
                         onClick = { selectedInvoiceForDetail = invoice },
+                        onPrintReceipt = {
+                            coroutineScope.launch {
+                                val lines = dao.getInvoiceLines(invoice.id, businessId)
+                                val store = StoreProfile.load(context, businessId)
+                                InvoicePdfGenerator.printInvoice80mm(context, invoice, lines, customer, store)
+                            }
+                        },
                         onSharePdf = {
                             coroutineScope.launch {
                                 val lines = dao.getInvoiceLines(invoice.id, businessId)
@@ -332,6 +339,7 @@ private fun InvoiceCard(
     invoice: InvoiceEntity,
     customerName: String,
     onClick: () -> Unit,
+    onPrintReceipt: () -> Unit,
     onSharePdf: () -> Unit,
     onDownloadPdf: () -> Unit
 ) {
@@ -367,7 +375,7 @@ private fun InvoiceCard(
             .clickable { onClick() }
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
@@ -375,12 +383,20 @@ private fun InvoiceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = invoice.invoiceNumber,
                         color = BillProTheme.colors.text,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Surface(color = statusContainerColor, shape = RoundedCornerShape(6.dp)) {
                         Text(
@@ -388,6 +404,8 @@ private fun InvoiceCard(
                             color = statusBadgeColor,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -396,7 +414,9 @@ private fun InvoiceCard(
                 Text(
                     text = dateText,
                     color = BillProTheme.colors.muted,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -407,7 +427,12 @@ private fun InvoiceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
                         text = customerName,
                         color = BillProTheme.colors.textSecondary,
@@ -422,33 +447,57 @@ private fun InvoiceCard(
                             text = "Due: ₹" + String.format(Locale.ENGLISH, "%,.2f", balance / 100.0),
                             color = BillProTheme.colors.warning,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
-                        text = "₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.totalPaise / 100.0),
+                        text = "₹" + String.format(Locale.ENGLISH, "%,.2f", invoice.totalPaise / 100.0),
                         color = BillProTheme.colors.text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
 
+                    // 80mm Print receipt button
                     IconButton(
-                        onClick = onDownloadPdf,
+                        onClick = onPrintReceipt,
                         modifier = Modifier
                             .size(32.dp)
                             .background(BillProTheme.colors.accent, CircleShape)
                     ) {
                         Icon(
-                            Icons.Default.Download,
-                            contentDescription = "Download PDF",
-                            tint = Color(0xFF17130A),
+                            Icons.Default.Print,
+                            contentDescription = "Print 80mm Receipt",
+                            tint = Color(0xFF191919),
                             modifier = Modifier.size(16.dp)
                         )
                     }
 
+                    // Download button
+                    IconButton(
+                        onClick = onDownloadPdf,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(BillProTheme.colors.surfaceVariant, CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Download PDF",
+                            tint = BillProTheme.colors.text,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Share button
                     IconButton(
                         onClick = onSharePdf,
                         modifier = Modifier
@@ -1141,13 +1190,32 @@ private fun InvoiceDetailDialog(
                     }
                 }
 
+                // 80mm Thermal Receipt Print Button
+                item {
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                val store = StoreProfile.load(context, businessId)
+                                InvoicePdfGenerator.printInvoice80mm(context, invoice, lines, customer, store)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent, contentColor = Color(0xFF191919)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Print Receipt (80mm Thermal)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 // Action Buttons: Download PDF & Share PDF
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
+                        OutlinedButton(
                             onClick = {
                                 coroutineScope.launch {
                                     val store = StoreProfile.load(context, businessId)
@@ -1160,13 +1228,12 @@ private fun InvoiceDetailDialog(
                                     }
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent, contentColor = Color(0xFF17130A)),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Download PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Download PDF", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
 
                         OutlinedButton(
@@ -1182,7 +1249,7 @@ private fun InvoiceDetailDialog(
                         ) {
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Share PDF", fontSize = 12.sp)
+                            Text("Share PDF", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

@@ -596,13 +596,16 @@ private fun RecentInvoiceRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Circular icon with yellow background
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(40.dp)
                         .background(Color(0xFFFAF6E5), CircleShape)
                         .border(1.dp, BillProTheme.colors.primaryYellow, CircleShape),
                     contentAlignment = Alignment.Center
@@ -615,17 +618,22 @@ private fun RecentInvoiceRow(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
                         text = "Order #${invoice.invoiceNumber}",
                         color = BillProTheme.colors.primaryText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = if (invoice.notes.isNotBlank()) invoice.notes else "Standard Bill",
                         color = BillProTheme.colors.secondaryText,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -652,6 +660,8 @@ private fun RecentInvoiceRow(
                         color = statusColor,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -660,7 +670,9 @@ private fun RecentInvoiceRow(
                     text = formatCurrency(invoice.totalPaise),
                     color = BillProTheme.colors.primaryText,
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -861,5 +873,5 @@ private fun HubMenuItem(
 
 private fun formatCurrency(paise: Long): String {
     val rupees = paise / 100.0
-    return "₹ " + String.format(Locale.ENGLISH, "%,.2f", rupees)
+    return "₹" + String.format(Locale.ENGLISH, "%,.2f", rupees)
 }
