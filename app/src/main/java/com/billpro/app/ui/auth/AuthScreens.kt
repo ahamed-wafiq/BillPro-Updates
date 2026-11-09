@@ -232,8 +232,8 @@ fun LoginScreen(
                     Text(
                         text = "Forgot Password?",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = BillProTheme.colors.accent,
+                        fontWeight = FontWeight.Bold,
+                        color = BillProTheme.colors.text,
                         modifier = Modifier
                             .clickable { onForgotPasswordClick() }
                             .padding(4.dp)
@@ -331,9 +331,9 @@ fun LoginScreen(
             Spacer(Modifier.width(6.dp))
             Text(
                 text = "Register Business",
-                color = BillProTheme.colors.accent,
+                color = BillProTheme.colors.text,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
                     .clickable { onNavigateToRegister() }
                     .padding(vertical = 4.dp)
@@ -637,9 +637,9 @@ fun RegisterScreen(
             Spacer(Modifier.width(6.dp))
             Text(
                 text = "Sign In",
-                color = BillProTheme.colors.accent,
+                color = BillProTheme.colors.text,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 modifier = Modifier
                     .clickable { onNavigateToLogin() }
                     .padding(vertical = 4.dp)

@@ -92,7 +92,7 @@ fun StoreProfileDialog(
                         )
                         Text(
                             text = "Tenant: $businessId",
-                            color = BillProTheme.colors.accent,
+                            color = BillProTheme.colors.textSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -110,39 +110,47 @@ fun StoreProfileDialog(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = BillProTheme.colors.accent, modifier = Modifier.size(12.dp))
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = BillProTheme.colors.text, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Copy ID", fontSize = 10.sp, color = BillProTheme.colors.accent, fontWeight = FontWeight.Bold)
+                            Text("Copy ID", fontSize = 11.sp, color = BillProTheme.colors.text, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = BillProTheme.colors.surface,
-                    contentColor = BillProTheme.colors.accent,
-                    divider = {}
+                Surface(
+                    color = BillProTheme.colors.surfaceVariant,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Profile", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = { Text("Account", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        text = { Text("Updates", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val tabs = listOf("Profile", "Sync", "Account", "Updates")
+                        tabs.forEachIndexed { index, tabTitle ->
+                            val isSelected = selectedTab == index
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) BillProTheme.colors.accent else Color.Transparent)
+                                    .clickable { selectedTab = index }
+                                    .padding(vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = tabTitle,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    color = if (isSelected) Color(0xFF17130A) else Color(0xFF555555),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -153,7 +161,8 @@ fun StoreProfileDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp),
+                            .heightIn(max = 440.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (errorMessage != null) {
@@ -165,27 +174,28 @@ fun StoreProfileDialog(
                             onValueChange = { storeName = it; errorMessage = null },
                             label = { Text("Store / Business Name *") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = phone,
-                                onValueChange = { phone = it },
-                                label = { Text("Contact Phone") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
+                        OutlinedTextField(
+                            value = phone,
+                            onValueChange = { phone = it },
+                            label = { Text("Contact Phone") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
 
-                            OutlinedTextField(
-                                value = gstin,
-                                onValueChange = { gstin = it.uppercase() },
-                                label = { Text("GSTIN") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        OutlinedTextField(
+                            value = gstin,
+                            onValueChange = { gstin = it.uppercase() },
+                            label = { Text("GSTIN (Optional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
 
                         OutlinedTextField(
                             value = email,
@@ -193,7 +203,8 @@ fun StoreProfileDialog(
                             label = { Text("Contact Email") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         )
 
                         OutlinedTextField(
@@ -201,7 +212,8 @@ fun StoreProfileDialog(
                             onValueChange = { address = it },
                             label = { Text("Business Address") },
                             maxLines = 2,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         )
 
                         OutlinedTextField(
@@ -209,7 +221,8 @@ fun StoreProfileDialog(
                             onValueChange = { terms = it },
                             label = { Text("Invoice Terms & Conditions") },
                             maxLines = 3,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                 }
@@ -218,7 +231,8 @@ fun StoreProfileDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp),
+                            .heightIn(max = 440.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         // Cloud Sync Banner & Button
@@ -356,7 +370,8 @@ fun StoreProfileDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp),
+                            .heightIn(max = 440.dp)
+                            .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         Surface(
@@ -368,7 +383,7 @@ fun StoreProfileDialog(
                                 Text("Active Business Session", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 Text("Owner: $ownerName", color = BillProTheme.colors.textSecondary, fontSize = 12.sp)
                                 Text("Email: $ownerEmail", color = BillProTheme.colors.textSecondary, fontSize = 12.sp)
-                                Text("Business ID: $businessId", color = BillProTheme.colors.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Business ID: $businessId", color = BillProTheme.colors.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -512,8 +527,8 @@ fun StoreProfileDialog(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("Update Available!", color = BillProTheme.colors.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Text(state.info.tagName, color = BillProTheme.colors.accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            Text("Update Available!", color = BillProTheme.colors.text, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                            Surface(color = BillProTheme.colors.accent, shape = RoundedCornerShape(6.dp)) { Text(state.info.tagName, color = Color(0xFF17130A), fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) }
                                         }
                                         Text(state.info.releaseName, color = BillProTheme.colors.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 
@@ -592,7 +607,7 @@ fun StoreProfileDialog(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Text("${(state.progress * 100).toInt()}%", color = BillProTheme.colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("${(state.progress * 100).toInt()}%", color = BillProTheme.colors.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             if (state.totalBytes > 0) {
                                                 Text(
                                                     "%.1f MB / %.1f MB".format(state.downloadedBytes / (1024.0 * 1024.0), state.totalBytes / (1024.0 * 1024.0)),
@@ -746,13 +761,13 @@ fun StoreProfileDialog(
                 }
             } else {
                 TextButton(onClick = onDismiss) {
-                    Text("Done", color = BillProTheme.colors.accent, fontWeight = FontWeight.Bold)
+                    Text("Done", color = BillProTheme.colors.text, fontWeight = FontWeight.Bold)
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = BillProTheme.colors.muted)
+                Text("Cancel", color = BillProTheme.colors.text, fontWeight = FontWeight.SemiBold)
             }
         },
         containerColor = BillProTheme.colors.surface,
@@ -780,7 +795,7 @@ fun StoreProfileDialog(
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutConfirm = false }) {
-                    Text("Cancel", color = BillProTheme.colors.muted)
+                    Text("Cancel", color = BillProTheme.colors.text, fontWeight = FontWeight.SemiBold)
                 }
             }
         )

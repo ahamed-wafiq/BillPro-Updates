@@ -571,8 +571,8 @@ private fun CreateInvoiceDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Create New Bill", color = BillProTheme.colors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Surface(color = BillProTheme.colors.surfaceVariant, shape = RoundedCornerShape(8.dp)) {
-                    Text(invoiceNumber, color = BillProTheme.colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(6.dp))
+                Surface(color = BillProTheme.colors.accent, shape = RoundedCornerShape(8.dp)) {
+                    Text(invoiceNumber, color = Color(0xFF17130A), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                 }
             }
         },
@@ -685,7 +685,7 @@ private fun CreateInvoiceDialog(
                                             }
                                             Text(
                                                 "₹ " + String.format(Locale.ENGLISH, "%,.2f", prod.salePricePaise / 100.0),
-                                                color = BillProTheme.colors.accent,
+                                                color = BillProTheme.colors.text,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -879,7 +879,7 @@ private fun CreateInvoiceDialog(
                                 Text("NET PAYABLE:", color = BillProTheme.colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     "₹ " + String.format(Locale.ENGLISH, "%,.2f", totalAmountPaise / 100.0),
-                                    color = BillProTheme.colors.accent,
+                                    color = BillProTheme.colors.text,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
@@ -1126,7 +1126,7 @@ private fun InvoiceDetailDialog(
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Total Amount", color = BillProTheme.colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.totalPaise / 100.0), color = BillProTheme.colors.accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.totalPaise / 100.0), color = BillProTheme.colors.text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Amount Paid", color = BillProTheme.colors.muted, fontSize = 12.sp)
@@ -1216,7 +1216,7 @@ private fun InvoiceDetailDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = BillProTheme.colors.accent)
+                Text("Close", color = BillProTheme.colors.text, fontWeight = FontWeight.Bold)
             }
         },
         containerColor = BillProTheme.colors.surface,

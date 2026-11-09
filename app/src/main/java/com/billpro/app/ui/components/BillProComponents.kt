@@ -473,7 +473,7 @@ fun SectionHeader(
         if (actionLabel != null && onActionClick != null) {
             Text(
                 text = actionLabel.uppercase(),
-                color = BillProTheme.colors.primaryYellow,
+                color = if (isDarkTheme) BillProTheme.colors.primaryYellow else BillProTheme.colors.primaryText,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.sp,

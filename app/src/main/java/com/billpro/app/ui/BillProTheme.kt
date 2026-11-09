@@ -1,11 +1,34 @@
 package com.billpro.app.ui
 
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+
+private val defaultTypography = Typography()
+val BillProTypography = Typography(
+    displayLarge = defaultTypography.displayLarge.copy(fontFamily = FontFamily.SansSerif),
+    displayMedium = defaultTypography.displayMedium.copy(fontFamily = FontFamily.SansSerif),
+    displaySmall = defaultTypography.displaySmall.copy(fontFamily = FontFamily.SansSerif),
+    headlineLarge = defaultTypography.headlineLarge.copy(fontFamily = FontFamily.SansSerif),
+    headlineMedium = defaultTypography.headlineMedium.copy(fontFamily = FontFamily.SansSerif),
+    headlineSmall = defaultTypography.headlineSmall.copy(fontFamily = FontFamily.SansSerif),
+    titleLarge = defaultTypography.titleLarge.copy(fontFamily = FontFamily.SansSerif),
+    titleMedium = defaultTypography.titleMedium.copy(fontFamily = FontFamily.SansSerif),
+    titleSmall = defaultTypography.titleSmall.copy(fontFamily = FontFamily.SansSerif),
+    bodyLarge = defaultTypography.bodyLarge.copy(fontFamily = FontFamily.SansSerif),
+    bodyMedium = defaultTypography.bodyMedium.copy(fontFamily = FontFamily.SansSerif),
+    bodySmall = defaultTypography.bodySmall.copy(fontFamily = FontFamily.SansSerif),
+    labelLarge = defaultTypography.labelLarge.copy(fontFamily = FontFamily.SansSerif),
+    labelMedium = defaultTypography.labelMedium.copy(fontFamily = FontFamily.SansSerif),
+    labelSmall = defaultTypography.labelSmall.copy(fontFamily = FontFamily.SansSerif)
+)
 
 @Immutable
 data class BillProPalette(
@@ -79,6 +102,12 @@ fun BillProTheme(content: @Composable () -> Unit) {
             error = palette.error,
             onError = Color.White
         ),
-        content = content
-    )
+        typography = BillProTypography
+    ) {
+        CompositionLocalProvider(
+            LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = FontFamily.SansSerif)
+        ) {
+            content()
+        }
+    }
 }

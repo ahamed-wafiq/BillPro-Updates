@@ -758,24 +758,24 @@ private fun MoreMenuScreen(
                         HubMenuItem(
                             icon = Icons.Default.ReceiptLong,
                             title = "Invoices & Billing History",
-                            subtitle = "View and print generated customer invoices",
+                            subtitle = "View, download and share customer invoices",
                             onClick = { onNavigate(Tab.Invoices) }
                         )
-                        Divider(color = Color(0xFFF0EFEA))
+                        HorizontalDivider(color = Color(0xFFF0EFEA))
                         HubMenuItem(
                             icon = Icons.Default.People,
                             title = "Customer Ledger",
                             subtitle = "Customer balances, contact info and dues",
                             onClick = { onNavigate(Tab.Ledger) }
                         )
-                        Divider(color = Color(0xFFF0EFEA))
+                        HorizontalDivider(color = Color(0xFFF0EFEA))
                         HubMenuItem(
                             icon = Icons.Default.BarChart,
-                            title = "Reports & GST Analytics",
-                            subtitle = "Daily, monthly sales and tax breakdowns",
+                            title = "Reports & Analytics",
+                            subtitle = "Daily, monthly sales and business breakdown",
                             onClick = { onNavigate(Tab.Reports) }
                         )
-                        Divider(color = Color(0xFFF0EFEA))
+                        HorizontalDivider(color = Color(0xFFF0EFEA))
                         HubMenuItem(
                             icon = Icons.Default.SystemUpdate,
                             title = "Check for Updates",
