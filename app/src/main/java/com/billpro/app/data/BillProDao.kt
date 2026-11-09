@@ -141,6 +141,9 @@ interface BillProDao {
     @Query("SELECT * FROM invoices WHERE customerId = :customerId AND businessId = :businessId ORDER BY createdAtEpochMs DESC")
     fun observeCustomerInvoices(customerId: Long, businessId: String): Flow<List<InvoiceEntity>>
 
+    @Query("SELECT COALESCE(SUM(totalPaise - paidPaise), 0) FROM invoices WHERE customerId = :customerId AND businessId = :businessId AND status != 'CANCELLED'")
+    suspend fun getCustomerUnpaidInvoiceBalance(customerId: Long, businessId: String): Long
+
     // ----------------------------------------------------
     // INVOICES & LINES (ISOLATED BY BUSINESS)
     // ----------------------------------------------------

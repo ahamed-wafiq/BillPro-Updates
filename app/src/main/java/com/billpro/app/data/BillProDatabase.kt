@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BusinessEntity::class,
         InventoryLedgerEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class BillProDatabase : RoomDatabase() {
@@ -101,6 +101,12 @@ abstract class BillProDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE invoices ADD COLUMN previousBalancePaise INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): BillProDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -108,7 +114,7 @@ abstract class BillProDatabase : RoomDatabase() {
                     BillProDatabase::class.java,
                     "billpro.db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 .also { INSTANCE = it }
             }

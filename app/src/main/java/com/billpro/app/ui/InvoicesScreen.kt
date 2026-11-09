@@ -27,8 +27,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.billpro.app.data.*
-import com.billpro.app.domain.GstCalculator
-import com.billpro.app.printing.EscPosFormatter
 import com.billpro.app.printing.InvoicePdfGenerator
 import com.billpro.app.ui.components.*
 import kotlinx.coroutines.launch
@@ -180,7 +178,7 @@ fun InvoicesScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Click 'New Bill' to create your first tax invoice with live GST calculation.",
+                                text = "Click 'New Bill' to create your first invoice.",
                                 color = BillProTheme.colors.muted,
                                 fontSize = 12.sp
                             )
@@ -213,6 +211,19 @@ fun InvoicesScreen(
                                 val store = StoreProfile.load(context, businessId)
                                 val pdf = InvoicePdfGenerator.generateInvoicePdf(context, invoice, lines, customer, store)
                                 InvoicePdfGenerator.shareInvoicePdf(context, pdf)
+                            }
+                        },
+                        onDownloadPdf = {
+                            coroutineScope.launch {
+                                val lines = dao.getInvoiceLines(invoice.id, businessId)
+                                val store = StoreProfile.load(context, businessId)
+                                val pdf = InvoicePdfGenerator.generateInvoicePdf(context, invoice, lines, customer, store)
+                                val savedFile = InvoicePdfGenerator.savePdfToDownloads(context, pdf)
+                                if (savedFile != null) {
+                                    Toast.makeText(context, "Invoice saved to Downloads/BillPro/${savedFile.name}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Failed to save PDF to Downloads", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     )
@@ -321,7 +332,8 @@ private fun InvoiceCard(
     invoice: InvoiceEntity,
     customerName: String,
     onClick: () -> Unit,
-    onSharePdf: () -> Unit
+    onSharePdf: () -> Unit,
+    onDownloadPdf: () -> Unit
 ) {
     val dateText = remember(invoice.createdAtEpochMs) {
         val sdf = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault())
@@ -388,7 +400,7 @@ private fun InvoiceCard(
                 )
             }
 
-            Divider(color = BillProTheme.colors.cardBorder)
+            HorizontalDivider(color = BillProTheme.colors.cardBorder)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -415,13 +427,27 @@ private fun InvoiceCard(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.totalPaise / 100.0),
                         color = BillProTheme.colors.text,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
+
+                    IconButton(
+                        onClick = onDownloadPdf,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(BillProTheme.colors.accent, CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "Download PDF",
+                            tint = Color(0xFF17130A),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
 
                     IconButton(
                         onClick = onSharePdf,
@@ -432,7 +458,7 @@ private fun InvoiceCard(
                         Icon(
                             Icons.Default.Share,
                             contentDescription = "Share PDF",
-                            tint = BillProTheme.colors.accent,
+                            tint = BillProTheme.colors.textSecondary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -443,26 +469,16 @@ private fun InvoiceCard(
 }
 
 // -----------------------------------------------------------------------------------------
-// CREATE INVOICE DIALOG WITH LIVE GST & STOCK DECREMENT
+// CREATE INVOICE DIALOG (NO GST, PREVIOUS BALANCE OPTION, LIVE STOCK DECREMENT)
 // -----------------------------------------------------------------------------------------
 private data class DraftLineItem(
     val product: ProductEntity?,
     val description: String,
     val quantity: Double,
-    val unitPricePaise: Long,
-    val gstRatePercent: Double
+    val unitPricePaise: Long
 ) {
-    val taxableValuePaise: Long
+    val lineTotalPaise: Long
         get() = (quantity * unitPricePaise).toLong()
-
-    fun calculateTax(isInterState: Boolean): Long {
-        val breakdown = GstCalculator.calculate(taxableValuePaise, gstRatePercent, isInterState)
-        return breakdown.cgstPaise + breakdown.sgstPaise + breakdown.igstPaise
-    }
-
-    fun calculateTotal(isInterState: Boolean): Long {
-        return taxableValuePaise + calculateTax(isInterState)
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -484,37 +500,45 @@ private fun CreateInvoiceDialog(
 
     var invoiceNumber by remember { mutableStateOf(autoInvoiceNo) }
     var selectedCustomerId by remember { mutableStateOf<Long?>(null) }
-    var isInterState by remember { mutableStateOf(false) }
     var discountText by remember { mutableStateOf("0") }
     var paymentMode by remember { mutableStateOf("Cash") }
     var notes by remember { mutableStateOf("") }
+
+    // Previous Balance states
+    var includePreviousBalance by remember { mutableStateOf(false) }
+    var previousBalanceText by remember { mutableStateOf("0") }
+    var customerPastBalancePaise by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(selectedCustomerId) {
+        val cid = selectedCustomerId
+        if (cid != null) {
+            val unpaid = dao.getCustomerUnpaidInvoiceBalance(cid, businessId)
+            val cust = customers.firstOrNull { it.id == cid }
+            val opening = cust?.openingBalancePaise ?: 0L
+            val pastDue = (opening + unpaid).coerceAtLeast(0L)
+            customerPastBalancePaise = pastDue
+            if (pastDue > 0) {
+                previousBalanceText = String.format(Locale.ENGLISH, "%.2f", pastDue / 100.0)
+                includePreviousBalance = true
+            } else {
+                previousBalanceText = "0"
+                includePreviousBalance = false
+            }
+        } else {
+            customerPastBalancePaise = 0L
+            previousBalanceText = "0"
+            includePreviousBalance = false
+        }
+    }
 
     val lineItems = remember { mutableStateListOf<DraftLineItem>() }
 
     // Dialog state to add item from inventory
     var isAddProductDropdownOpen by remember { mutableStateOf(false) }
-    var customItemDesc by remember { mutableStateOf("") }
-    var customItemPriceText by remember { mutableStateOf("") }
-    var customItemGst by remember { mutableStateOf(18.0) }
-    var isAddingCustomItem by remember { mutableStateOf(false) }
 
-    // Totals calculation
+    // Totals calculation (No GST)
     val subtotalPaise = remember(lineItems.toList()) {
-        lineItems.sumOf { it.taxableValuePaise }
-    }
-
-    val totalTaxBreakdown = remember(lineItems.toList(), isInterState) {
-        var totalCgst = 0L
-        var totalSgst = 0L
-        var totalIgst = 0L
-
-        for (item in lineItems) {
-            val breakdown = GstCalculator.calculate(item.taxableValuePaise, item.gstRatePercent, isInterState)
-            totalCgst += breakdown.cgstPaise
-            totalSgst += breakdown.sgstPaise
-            totalIgst += breakdown.igstPaise
-        }
-        Triple(totalCgst, totalSgst, totalIgst)
+        lineItems.sumOf { it.lineTotalPaise }
     }
 
     val discountPaise = remember(discountText) {
@@ -522,16 +546,18 @@ private fun CreateInvoiceDialog(
         (discountRupees * 100).toLong().coerceAtLeast(0)
     }
 
-    val totalAmountPaise = remember(subtotalPaise, totalTaxBreakdown, discountPaise) {
-        val tax = totalTaxBreakdown.first + totalTaxBreakdown.second + totalTaxBreakdown.third
-        (subtotalPaise + tax - discountPaise).coerceAtLeast(0)
+    val appliedPreviousBalancePaise = if (includePreviousBalance) {
+        val amtRupees = previousBalanceText.toDoubleOrNull() ?: 0.0
+        (amtRupees * 100).toLong().coerceAtLeast(0L)
+    } else 0L
+
+    val totalAmountPaise = remember(subtotalPaise, discountPaise, appliedPreviousBalancePaise) {
+        (subtotalPaise - discountPaise + appliedPreviousBalancePaise).coerceAtLeast(0)
     }
 
     var paidAmountText by remember { mutableStateOf("") }
     LaunchedEffect(totalAmountPaise) {
-        if (paidAmountText.isBlank() || paidAmountText == "0") {
-            paidAmountText = String.format(Locale.ENGLISH, "%.2f", totalAmountPaise / 100.0)
-        }
+        paidAmountText = String.format(Locale.ENGLISH, "%.2f", totalAmountPaise / 100.0)
     }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -568,60 +594,29 @@ private fun CreateInvoiceDialog(
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Customer", color = BillProTheme.colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             // Walk-in option
-                            FilterChip(
-                                selected = selectedCustomerId == null,
-                                onClick = { selectedCustomerId = null },
-                                label = { Text("Walk-in / Cash") }
-                            )
+                            item {
+                                FilterChip(
+                                    selected = selectedCustomerId == null,
+                                    onClick = { selectedCustomerId = null },
+                                    label = { Text("Walk-in / Cash") }
+                                )
+                            }
 
                             // Registered customers
-                            if (customers.isNotEmpty()) {
-                                customers.take(3).forEach { cust ->
-                                    FilterChip(
-                                        selected = selectedCustomerId == cust.id,
-                                        onClick = { selectedCustomerId = cust.id },
-                                        label = { Text(cust.name.take(12)) }
-                                    )
-                                }
+                            items(customers) { cust ->
+                                FilterChip(
+                                    selected = selectedCustomerId == cust.id,
+                                    onClick = { selectedCustomerId = cust.id },
+                                    label = { Text(cust.name) }
+                                )
                             }
                         }
                     }
                 }
 
-                // 2. Intra-state vs Inter-state Tax Switch
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(BillProTheme.colors.surfaceVariant, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = if (isInterState) "Inter-State (IGST)" else "Intra-State (CGST + SGST)",
-                                color = BillProTheme.colors.text,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = if (isInterState) "Applies single Integrated GST" else "Splits 50/50 Central & State GST",
-                                color = BillProTheme.colors.muted,
-                                fontSize = 11.sp
-                            )
-                        }
-                        Switch(
-                            checked = isInterState,
-                            onCheckedChange = { isInterState = it },
-                            colors = SwitchDefaults.colors(checkedThumbColor = BillProTheme.colors.accent)
-                        )
-                    }
-                }
-
-                // 3. Products List Header & Add buttons
+                // 2. Products List Header & Add buttons
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -664,7 +659,7 @@ private fun CreateInvoiceDialog(
                                 if (availableProducts.isEmpty()) {
                                     Text("No products in inventory. Add products in the Inventory tab.", color = BillProTheme.colors.muted, fontSize = 11.sp)
                                 } else {
-                                    availableProducts.take(6).forEach { prod ->
+                                    availableProducts.take(8).forEach { prod ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -675,8 +670,7 @@ private fun CreateInvoiceDialog(
                                                             product = prod,
                                                             description = prod.name,
                                                             quantity = 1.0,
-                                                            unitPricePaise = prod.salePricePaise,
-                                                            gstRatePercent = prod.gstRatePercent
+                                                            unitPricePaise = prod.salePricePaise
                                                         )
                                                     )
                                                     isAddProductDropdownOpen = false
@@ -731,7 +725,7 @@ private fun CreateInvoiceDialog(
                                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(item.description, color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                     Text(
-                                        "Rate: ₹${item.unitPricePaise / 100.0} | GST: ${item.gstRatePercent.toInt()}%",
+                                        "Rate: ₹" + String.format(Locale.ENGLISH, "%.2f", item.unitPricePaise / 100.0),
                                         color = BillProTheme.colors.muted,
                                         fontSize = 11.sp
                                     )
@@ -769,7 +763,7 @@ private fun CreateInvoiceDialog(
                                     }
 
                                     Text(
-                                        text = "₹ " + String.format(Locale.ENGLISH, "%,.2f", item.calculateTotal(isInterState) / 100.0),
+                                        text = "₹ " + String.format(Locale.ENGLISH, "%,.2f", item.lineTotalPaise / 100.0),
                                         color = BillProTheme.colors.text,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
@@ -788,7 +782,66 @@ private fun CreateInvoiceDialog(
                     }
                 }
 
-                // 4. Financial Calculation Summary
+                // 3. Discount Input
+                item {
+                    OutlinedTextField(
+                        value = discountText,
+                        onValueChange = { discountText = it },
+                        label = { Text("Discount (₹)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+
+                // 4. Add Previous Balance Option
+                item {
+                    Surface(
+                        color = BillProTheme.colors.cardBackground,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Add Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    if (customerPastBalancePaise > 0) {
+                                        Text(
+                                            "Customer past dues: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
+                                            color = BillProTheme.colors.warning,
+                                            fontSize = 11.sp
+                                        )
+                                    } else {
+                                        Text("Include customer's past balance in this bill", color = BillProTheme.colors.muted, fontSize = 11.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = includePreviousBalance,
+                                    onCheckedChange = { includePreviousBalance = it },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = BillProTheme.colors.accent)
+                                )
+                            }
+
+                            if (includePreviousBalance) {
+                                OutlinedTextField(
+                                    value = previousBalanceText,
+                                    onValueChange = { previousBalanceText = it },
+                                    label = { Text("Previous Balance Amount (₹)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 5. Financial Calculation Summary
                 item {
                     Surface(
                         color = BillProTheme.colors.cardBackground,
@@ -801,19 +854,18 @@ private fun CreateInvoiceDialog(
                                 Text("Subtotal:", color = BillProTheme.colors.muted, fontSize = 12.sp)
                                 Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", subtotalPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
                             }
-                            if (isInterState) {
+
+                            if (discountPaise > 0) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("IGST:", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                    Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", totalTaxBreakdown.third / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
+                                    Text("Discount:", color = BillProTheme.colors.muted, fontSize = 12.sp)
+                                    Text("- ₹ " + String.format(Locale.ENGLISH, "%,.2f", discountPaise / 100.0), color = BillProTheme.colors.success, fontSize = 12.sp)
                                 }
-                            } else {
+                            }
+
+                            if (appliedPreviousBalancePaise > 0) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("CGST:", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                    Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", totalTaxBreakdown.first / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
-                                }
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("SGST:", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                    Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", totalTaxBreakdown.second / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
+                                    Text("Previous Balance:", color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("+ ₹ " + String.format(Locale.ENGLISH, "%,.2f", appliedPreviousBalancePaise / 100.0), color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -836,7 +888,7 @@ private fun CreateInvoiceDialog(
                     }
                 }
 
-                // 5. Payment Details
+                // 6. Payment Details
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Payment Collection", color = BillProTheme.colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -891,12 +943,13 @@ private fun CreateInvoiceDialog(
                         customerId = selectedCustomerId,
                         createdAtEpochMs = now,
                         placeOfSupplyStateCode = "",
-                        isInterState = isInterState,
+                        isInterState = false,
                         subtotalPaise = subtotalPaise,
-                        cgstPaise = totalTaxBreakdown.first,
-                        sgstPaise = totalTaxBreakdown.second,
-                        igstPaise = totalTaxBreakdown.third,
+                        cgstPaise = 0L,
+                        sgstPaise = 0L,
+                        igstPaise = 0L,
                         discountPaise = discountPaise,
+                        previousBalancePaise = appliedPreviousBalancePaise,
                         totalPaise = totalAmountPaise,
                         paidPaise = paidPaise,
                         status = status,
@@ -904,7 +957,6 @@ private fun CreateInvoiceDialog(
                     )
 
                     val dbLines = lineItems.map { item ->
-                        val lineTax = item.calculateTax(isInterState)
                         InvoiceLineEntity(
                             invoiceId = 0L,
                             businessId = businessId,
@@ -912,10 +964,10 @@ private fun CreateInvoiceDialog(
                             description = item.description,
                             quantity = item.quantity,
                             unitPricePaise = item.unitPricePaise,
-                            gstRatePercent = item.gstRatePercent,
-                            taxableValuePaise = item.taxableValuePaise,
-                            taxPaise = lineTax,
-                            lineTotalPaise = item.taxableValuePaise + lineTax
+                            gstRatePercent = 0.0,
+                            taxableValuePaise = item.lineTotalPaise,
+                            taxPaise = 0L,
+                            lineTotalPaise = item.lineTotalPaise
                         )
                     }
 
@@ -948,7 +1000,7 @@ private fun CreateInvoiceDialog(
 }
 
 // -----------------------------------------------------------------------------------------
-// INVOICE DETAIL & PDF SHARING / PRINTING DIALOG
+// INVOICE DETAIL & PDF SHARING / DOWNLOAD DIALOG
 // -----------------------------------------------------------------------------------------
 @Composable
 private fun InvoiceDetailDialog(
@@ -1020,9 +1072,6 @@ private fun InvoiceDetailDialog(
                             if (customer != null && customer.phone.isNotBlank()) {
                                 Text("Phone: ${customer.phone}", color = BillProTheme.colors.textSecondary, fontSize = 11.sp)
                             }
-                            if (customer != null && customer.gstin.isNotBlank()) {
-                                Text("GSTIN: ${customer.gstin}", color = BillProTheme.colors.muted, fontSize = 11.sp)
-                            }
                         }
                     }
                 }
@@ -1041,7 +1090,7 @@ private fun InvoiceDetailDialog(
                         Column(Modifier.weight(1f)) {
                             Text(line.description, color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
-                            Text("$qtyText x ₹${line.unitPricePaise / 100.0} (GST ${line.gstRatePercent.toInt()}%)", color = BillProTheme.colors.muted, fontSize = 11.sp)
+                            Text("$qtyText x ₹" + String.format(Locale.ENGLISH, "%.2f", line.unitPricePaise / 100.0), color = BillProTheme.colors.muted, fontSize = 11.sp)
                         }
                         Text(
                             "₹ " + String.format(Locale.ENGLISH, "%,.2f", line.lineTotalPaise / 100.0),
@@ -1063,22 +1112,16 @@ private fun InvoiceDetailDialog(
                             Text("Subtotal", color = BillProTheme.colors.muted, fontSize = 12.sp)
                             Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.subtotalPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
                         }
-                        if (invoice.cgstPaise > 0) {
+                        if (invoice.discountPaise > 0) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("CGST", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.cgstPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
+                                Text("Discount", color = BillProTheme.colors.muted, fontSize = 12.sp)
+                                Text("- ₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.discountPaise / 100.0), color = BillProTheme.colors.success, fontSize = 12.sp)
                             }
                         }
-                        if (invoice.sgstPaise > 0) {
+                        if (invoice.previousBalancePaise > 0) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("SGST", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.sgstPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
-                            }
-                        }
-                        if (invoice.igstPaise > 0) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("IGST", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.igstPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
+                                Text("Previous Balance", color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("+ ₹ " + String.format(Locale.ENGLISH, "%,.2f", invoice.previousBalancePaise / 100.0), color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1098,12 +1141,34 @@ private fun InvoiceDetailDialog(
                     }
                 }
 
-                // Action Buttons
+                // Action Buttons: Download PDF & Share PDF
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val store = StoreProfile.load(context, businessId)
+                                    val pdf = InvoicePdfGenerator.generateInvoicePdf(context, invoice, lines, customer, store)
+                                    val savedFile = InvoicePdfGenerator.savePdfToDownloads(context, pdf)
+                                    if (savedFile != null) {
+                                        Toast.makeText(context, "Invoice saved to Downloads/BillPro/${savedFile.name}", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to save PDF to Downloads", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent, contentColor = Color(0xFF17130A)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Download PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
                         OutlinedButton(
                             onClick = {
                                 coroutineScope.launch {
@@ -1118,25 +1183,6 @@ private fun InvoiceDetailDialog(
                             Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Share PDF", fontSize = 12.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                val store = StoreProfile.load(context, businessId)
-                                val receiptBytes = EscPosFormatter.receipt(
-                                    storeName = store.storeName,
-                                    invoiceNo = invoice.invoiceNumber,
-                                    lines = lines.map { it.description to it.lineTotalPaise },
-                                    totalPaise = invoice.totalPaise
-                                )
-                                Toast.makeText(context, "Receipt formatted (${receiptBytes.size} bytes ready for printer)", Toast.LENGTH_SHORT).show()
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Print", fontSize = 12.sp)
                         }
                     }
                 }
