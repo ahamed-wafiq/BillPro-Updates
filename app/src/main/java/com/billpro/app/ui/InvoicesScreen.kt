@@ -23,9 +23,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.billpro.app.data.*
 import com.billpro.app.printing.InvoicePdfGenerator
 import com.billpro.app.ui.components.*
@@ -553,7 +556,8 @@ private data class DraftLineItem(
     val product: ProductEntity?,
     val description: String,
     val quantity: Double,
-    val unitPricePaise: Long
+    val unitPricePaise: Long,
+    val quantityText: String = if (quantity % 1.0 == 0.0) quantity.toInt().toString() else "%.1f".format(quantity)
 ) {
     val lineTotalPaise: Long
         get() = (quantity * unitPricePaise).toLong()
@@ -578,6 +582,10 @@ private fun CreateInvoiceDialog(
 
     var invoiceNumber by remember { mutableStateOf(autoInvoiceNo) }
     var selectedCustomerId by remember { mutableStateOf<Long?>(null) }
+    var customerSearchQuery by remember { mutableStateOf("") }
+    var productSearchQuery by remember { mutableStateOf("") }
+    var isBrowseCatalogOpen by remember { mutableStateOf(false) }
+
     var discountText by remember { mutableStateOf("0") }
     var paymentMode by remember { mutableStateOf("Cash") }
     var notes by remember { mutableStateOf("") }
@@ -585,6 +593,10 @@ private fun CreateInvoiceDialog(
     // Previous Balance states: fully automatic from customer account
     var includePreviousBalance by remember { mutableStateOf(false) }
     var customerPastBalancePaise by remember { mutableStateOf(0L) }
+
+    val selectedCustomer = remember(selectedCustomerId, customers) {
+        selectedCustomerId?.let { id -> customers.firstOrNull { it.id == id } }
+    }
 
     LaunchedEffect(selectedCustomerId) {
         val cid = selectedCustomerId
@@ -603,8 +615,29 @@ private fun CreateInvoiceDialog(
 
     val lineItems = remember { mutableStateListOf<DraftLineItem>() }
 
-    // Dialog state to add item from inventory
-    var isAddProductDropdownOpen by remember { mutableStateOf(false) }
+    // Filter customers based on search query
+    val filteredCustomers = remember(customers, customerSearchQuery) {
+        if (customerSearchQuery.isBlank()) {
+            customers.take(8)
+        } else {
+            val q = customerSearchQuery.trim().lowercase()
+            customers.filter { it.name.lowercase().contains(q) || it.phone.contains(q) }
+        }
+    }
+
+    // Filter products based on search query
+    val filteredProducts = remember(availableProducts, productSearchQuery) {
+        if (productSearchQuery.isBlank()) {
+            emptyList()
+        } else {
+            val q = productSearchQuery.trim().lowercase()
+            availableProducts.filter {
+                it.name.lowercase().contains(q) ||
+                it.sku.lowercase().contains(q) ||
+                it.barcode.lowercase().contains(q)
+            }
+        }
+    }
 
     // Totals calculation (No GST)
     val subtotalPaise = remember(lineItems.toList()) {
@@ -631,132 +664,329 @@ private fun CreateInvoiceDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Create New Bill", color = BillProTheme.colors.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Surface(color = BillProTheme.colors.accent, shape = RoundedCornerShape(8.dp)) {
-                    Text(invoiceNumber, color = Color(0xFF17130A), fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                }
-            }
-        },
-        text = {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 480.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                if (errorMessage != null) {
-                    item {
-                        Text(errorMessage!!, color = BillProTheme.colors.error, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // 1. Customer Selection
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Customer", color = BillProTheme.colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-
-                        LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Walk-in option
-                            item {
-                                FilterChip(
-                                    selected = selectedCustomerId == null,
-                                    onClick = { selectedCustomerId = null },
-                                    label = { Text("Walk-in / Cash") }
-                                )
-                            }
-
-                            // Registered customers
-                            items(customers) { cust ->
-                                FilterChip(
-                                    selected = selectedCustomerId == cust.id,
-                                    onClick = { selectedCustomerId = cust.id },
-                                    label = { Text(cust.name) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 2. Products List Header & Add buttons
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = BillProTheme.colors.secondaryBackground
+        ) {
+            Scaffold(
+                topBar = {
+                    Surface(
+                        color = Color.White,
+                        shadowElevation = 3.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = "BILL ITEMS (${lineItems.size})",
-                            color = BillProTheme.colors.textSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.2.sp
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalButton(
-                                onClick = { isAddProductDropdownOpen = !isAddProductDropdownOpen },
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("From Catalog", fontSize = 11.sp)
+                                IconButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Close",
+                                        tint = BillProTheme.colors.primaryText
+                                    )
+                                }
+
+                                Text(
+                                    text = "Create New Bill",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BillProTheme.colors.primaryText
+                                )
+                            }
+
+                            Surface(
+                                color = BillProTheme.colors.primaryYellow,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = invoiceNumber,
+                                    color = Color(0xFF191919),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                bottomBar = {
+                    Surface(
+                        color = Color.White,
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Total Payable",
+                                    fontSize = 11.sp,
+                                    color = BillProTheme.colors.secondaryText
+                                )
+                                Text(
+                                    text = "₹" + String.format(Locale.ENGLISH, "%,.2f", totalAmountPaise / 100.0),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = BillProTheme.colors.primaryText
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (lineItems.isEmpty()) {
+                                        errorMessage = "Please add at least one item to the invoice"
+                                        return@Button
+                                    }
+                                    if (lineItems.any { it.quantity <= 0.0 }) {
+                                        errorMessage = "Item quantity must be greater than zero"
+                                        return@Button
+                                    }
+
+                                    val paidRupees = paidAmountText.toDoubleOrNull() ?: 0.0
+                                    val paidPaise = (paidRupees * 100).toLong().coerceIn(0, totalAmountPaise)
+
+                                    val status = when {
+                                        paidPaise >= totalAmountPaise && totalAmountPaise > 0 -> "PAID"
+                                        paidPaise > 0 -> "PARTIAL"
+                                        else -> "UNPAID"
+                                    }
+
+                                    val now = System.currentTimeMillis()
+                                    val invoice = InvoiceEntity(
+                                        businessId = businessId,
+                                        invoiceNumber = invoiceNumber.trim(),
+                                        customerId = selectedCustomerId,
+                                        createdAtEpochMs = now,
+                                        placeOfSupplyStateCode = "",
+                                        isInterState = false,
+                                        subtotalPaise = subtotalPaise,
+                                        cgstPaise = 0L,
+                                        sgstPaise = 0L,
+                                        igstPaise = 0L,
+                                        discountPaise = discountPaise,
+                                        previousBalancePaise = appliedPreviousBalancePaise,
+                                        totalPaise = totalAmountPaise,
+                                        paidPaise = paidPaise,
+                                        status = status,
+                                        notes = notes.trim()
+                                    )
+
+                                    val dbLines = lineItems.map { item ->
+                                        InvoiceLineEntity(
+                                            invoiceId = 0L,
+                                            businessId = businessId,
+                                            productId = item.product?.id,
+                                            description = item.description,
+                                            quantity = item.quantity,
+                                            unitPricePaise = item.unitPricePaise,
+                                            gstRatePercent = 0.0,
+                                            taxableValuePaise = item.lineTotalPaise,
+                                            taxPaise = 0L,
+                                            lineTotalPaise = item.lineTotalPaise
+                                        )
+                                    }
+
+                                    coroutineScope.launch {
+                                        val newInvoiceId = dao.createInvoiceWithLines(
+                                            invoice = invoice,
+                                            lines = dbLines,
+                                            decrementStock = true,
+                                            recordCashbook = true
+                                        )
+                                        onInvoiceCreated(newInvoiceId)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = BillProTheme.colors.primaryYellow,
+                                    contentColor = Color(0xFF191919)
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .padding(start = 16.dp)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Generate Bill & Save", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
                     }
                 }
+            ) { innerPadding ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (errorMessage != null) {
+                        item {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color(0xFFFFEBEE),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFCDD2))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Error, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(errorMessage!!, color = Color(0xFFB71C1C), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
 
-                // Product catalog picker dropdown
-                if (isAddProductDropdownOpen) {
+                    // 1. Customer Section with Search Bar
                     item {
                         Surface(
-                            color = BillProTheme.colors.cardBackground,
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("Select Product:", color = BillProTheme.colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                if (availableProducts.isEmpty()) {
-                                    Text("No products in inventory. Add products in the Inventory tab.", color = BillProTheme.colors.muted, fontSize = 11.sp)
-                                } else {
-                                    availableProducts.take(8).forEach { prod ->
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "CUSTOMER",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BillProTheme.colors.secondaryText,
+                                    letterSpacing = 1.sp
+                                )
+
+                                if (selectedCustomer != null) {
+                                    // Selected Customer Card
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFFFFF9E6),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.primaryYellow),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
                                         Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    lineItems.add(
-                                                        DraftLineItem(
-                                                            product = prod,
-                                                            description = prod.name,
-                                                            quantity = 1.0,
-                                                            unitPricePaise = prod.salePricePaise
-                                                        )
-                                                    )
-                                                    isAddProductDropdownOpen = false
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(12.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column {
-                                                Text(prod.name, color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                                Text("Stock: ${prod.stockQuantity} ${prod.unit}", color = BillProTheme.colors.muted, fontSize = 10.sp)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .background(Color(0xFFFFC928), CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Person,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF191919),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = selectedCustomer.name,
+                                                        fontSize = 14.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF191919)
+                                                    )
+                                                    if (selectedCustomer.phone.isNotBlank()) {
+                                                        Text(
+                                                            text = selectedCustomer.phone,
+                                                            fontSize = 11.sp,
+                                                            color = Color(0xFF666666)
+                                                        )
+                                                    }
+                                                    if (customerPastBalancePaise > 0) {
+                                                        Text(
+                                                            text = "Past Dues: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFFE99A28)
+                                                        )
+                                                    }
+                                                }
                                             }
-                                            Text(
-                                                "₹ " + String.format(Locale.ENGLISH, "%,.2f", prod.salePricePaise / 100.0),
-                                                color = BillProTheme.colors.text,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
+
+                                            TextButton(onClick = { selectedCustomerId = null }) {
+                                                Text("Change", color = Color(0xFF191919), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Customer Search Bar
+                                    OutlinedTextField(
+                                        value = customerSearchQuery,
+                                        onValueChange = { customerSearchQuery = it },
+                                        placeholder = { Text("Search customer by name or phone...", fontSize = 13.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF888888)) },
+                                        trailingIcon = {
+                                            if (customerSearchQuery.isNotBlank()) {
+                                                IconButton(onClick = { customerSearchQuery = "" }) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF888888))
+                                                }
+                                            }
+                                        },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Quick Customer Options Chips
+                                    LazyRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        item {
+                                            FilterChip(
+                                                selected = selectedCustomerId == null,
+                                                onClick = { selectedCustomerId = null },
+                                                label = { Text("Walk-in / Cash", fontWeight = FontWeight.SemiBold) },
+                                                leadingIcon = { Icon(Icons.Default.PersonOutline, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                            )
+                                        }
+
+                                        items(filteredCustomers) { cust ->
+                                            FilterChip(
+                                                selected = selectedCustomerId == cust.id,
+                                                onClick = {
+                                                    selectedCustomerId = cust.id
+                                                    customerSearchQuery = ""
+                                                },
+                                                label = { Text(cust.name) }
                                             )
                                         }
                                     }
@@ -764,160 +994,387 @@ private fun CreateInvoiceDialog(
                             }
                         }
                     }
-                }
 
-                // Added Line Items
-                if (lineItems.isEmpty()) {
+                    // 2. Product Search & Add Section
                     item {
-                        Text(
-                            "No items added yet. Click 'From Catalog' above to add products.",
-                            color = BillProTheme.colors.muted,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    }
-                } else {
-                    items(lineItems.size) { index ->
-                        val item = lineItems[index]
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = BillProTheme.colors.surfaceVariant,
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(item.description, color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        "Rate: ₹" + String.format(Locale.ENGLISH, "%.2f", item.unitPricePaise / 100.0),
-                                        color = BillProTheme.colors.muted,
-                                        fontSize = 11.sp
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    // Quantity dec/inc
-                                    IconButton(
-                                        onClick = {
-                                            if (item.quantity > 1.0) {
-                                                lineItems[index] = item.copy(quantity = item.quantity - 1.0)
-                                            } else {
-                                                lineItems.removeAt(index)
-                                            }
-                                        },
-                                        modifier = Modifier.size(28.dp).background(BillProTheme.colors.cardBackground, CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = BillProTheme.colors.text, modifier = Modifier.size(14.dp))
-                                    }
-
-                                    Text(
-                                        text = if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else "%.1f".format(item.quantity),
-                                        color = BillProTheme.colors.text,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    IconButton(
-                                        onClick = {
-                                            lineItems[index] = item.copy(quantity = item.quantity + 1.0)
-                                        },
-                                        modifier = Modifier.size(28.dp).background(BillProTheme.colors.cardBackground, CircleShape)
-                                    ) {
-                                        Icon(Icons.Default.Add, contentDescription = "Increase", tint = BillProTheme.colors.text, modifier = Modifier.size(14.dp))
-                                    }
-
-                                    Text(
-                                        text = "₹ " + String.format(Locale.ENGLISH, "%,.2f", item.lineTotalPaise / 100.0),
-                                        color = BillProTheme.colors.text,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.widthIn(min = 60.dp)
-                                    )
-
-                                    IconButton(
-                                        onClick = { lineItems.removeAt(index) },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = BillProTheme.colors.error, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 3. Discount Input
-                item {
-                    OutlinedTextField(
-                        value = discountText,
-                        onValueChange = { discountText = it },
-                        label = { Text("Discount (₹)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-
-                // 4. Automatic Customer Previous Balance (Include / Exclude)
-                if (selectedCustomerId != null) {
-                    item {
-                        Surface(
-                            color = BillProTheme.colors.cardBackground,
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text("Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                        if (customerPastBalancePaise > 0) {
-                                            Text(
-                                                "Past outstanding: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
-                                                color = BillProTheme.colors.warning,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        } else {
-                                            Text("No past outstanding balance (₹0.00)", color = BillProTheme.colors.muted, fontSize = 11.sp)
-                                        }
-                                    }
+                                    Text(
+                                        text = "ADD ITEMS / PRODUCTS",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BillProTheme.colors.secondaryText,
+                                        letterSpacing = 1.sp
+                                    )
 
-                                    if (customerPastBalancePaise > 0) {
-                                        Switch(
-                                            checked = includePreviousBalance,
-                                            onCheckedChange = { includePreviousBalance = it },
-                                            colors = SwitchDefaults.colors(
-                                                checkedThumbColor = Color(0xFF191919),
-                                                checkedTrackColor = BillProTheme.colors.accent
-                                            )
+                                    TextButton(
+                                        onClick = { isBrowseCatalogOpen = !isBrowseCatalogOpen },
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Icon(
+                                            if (isBrowseCatalogOpen) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            if (isBrowseCatalogOpen) "Hide Catalog" else "Browse Catalog (${availableProducts.size})",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                 }
 
-                                if (customerPastBalancePaise > 0) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(Color(0xFFF1EFE9), RoundedCornerShape(8.dp))
-                                            .padding(3.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                // Search Bar for Items
+                                OutlinedTextField(
+                                    value = productSearchQuery,
+                                    onValueChange = { productSearchQuery = it },
+                                    placeholder = { Text("Search item by name, barcode or SKU...", fontSize = 13.sp) },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF888888)) },
+                                    trailingIcon = {
+                                        if (productSearchQuery.isNotBlank()) {
+                                            IconButton(onClick = { productSearchQuery = "" }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF888888))
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // Product search results or browse list
+                                val productsToShow = if (productSearchQuery.isNotBlank()) {
+                                    filteredProducts
+                                } else if (isBrowseCatalogOpen) {
+                                    availableProducts
+                                } else {
+                                    emptyList()
+                                }
+
+                                if (productsToShow.isNotEmpty()) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (includePreviousBalance) BillProTheme.colors.accent else Color.Transparent,
+                                        productsToShow.take(8).forEach { prod ->
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0xFFF9F9F8),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            val existingIndex = lineItems.indexOfFirst { it.product?.id == prod.id }
+                                                            if (existingIndex >= 0) {
+                                                                val existing = lineItems[existingIndex]
+                                                                val newQ = existing.quantity + 1.0
+                                                                lineItems[existingIndex] = existing.copy(
+                                                                    quantity = newQ,
+                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                                )
+                                                            } else {
+                                                                lineItems.add(
+                                                                    DraftLineItem(
+                                                                        product = prod,
+                                                                        description = prod.name,
+                                                                        quantity = 1.0,
+                                                                        unitPricePaise = prod.salePricePaise,
+                                                                        quantityText = "1"
+                                                                    )
+                                                                )
+                                                            }
+                                                        }
+                                                        .padding(10.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(prod.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919))
+                                                        Text(
+                                                            "Stock: ${prod.stockQuantity} ${prod.unit} • ₹${String.format(Locale.ENGLISH, "%.2f", prod.salePricePaise / 100.0)}",
+                                                            fontSize = 11.sp,
+                                                            color = Color(0xFF666666)
+                                                        )
+                                                    }
+
+                                                    FilledTonalButton(
+                                                        onClick = {
+                                                            val existingIndex = lineItems.indexOfFirst { it.product?.id == prod.id }
+                                                            if (existingIndex >= 0) {
+                                                                val existing = lineItems[existingIndex]
+                                                                val newQ = existing.quantity + 1.0
+                                                                lineItems[existingIndex] = existing.copy(
+                                                                    quantity = newQ,
+                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                                )
+                                                            } else {
+                                                                lineItems.add(
+                                                                    DraftLineItem(
+                                                                        product = prod,
+                                                                        description = prod.name,
+                                                                        quantity = 1.0,
+                                                                        unitPricePaise = prod.salePricePaise,
+                                                                        quantityText = "1"
+                                                                    )
+                                                                )
+                                                            }
+                                                        },
+                                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Text("Add", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Bill Items Section with Direct Unit Input Box
+                    item {
+                        Text(
+                            text = "BILL ITEMS (${lineItems.size})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BillProTheme.colors.secondaryText,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    if (lineItems.isEmpty()) {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No items added yet. Search items above to add to bill.",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF888888)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(lineItems.size) { index ->
+                            val item = lineItems[index]
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = item.description,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF191919)
+                                            )
+                                            Text(
+                                                text = "Unit Rate: ₹" + String.format(Locale.ENGLISH, "%.2f", item.unitPricePaise / 100.0),
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF777777)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { lineItems.removeAt(index) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.DeleteOutline,
+                                                contentDescription = "Remove Item",
+                                                tint = Color(0xFFE34B4B),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Quantity Direct Text Area / Input Box
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "Units:",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF555555)
+                                            )
+
+                                            IconButton(
+                                                onClick = {
+                                                    val current = item.quantity
+                                                    if (current > 1.0) {
+                                                        val newQ = current - 1.0
+                                                        lineItems[index] = item.copy(
+                                                            quantity = newQ,
+                                                            quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                        )
+                                                    } else {
+                                                        lineItems.removeAt(index)
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .background(Color(0xFFF1EFE9), CircleShape)
+                                            ) {
+                                                Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = Color(0xFF191919), modifier = Modifier.size(14.dp))
+                                            }
+
+                                            // Direct Text Area where user can enter any unit / quantity
+                                            OutlinedTextField(
+                                                value = item.quantityText,
+                                                onValueChange = { newText ->
+                                                    val filtered = newText.filter { it.isDigit() || it == '.' }
+                                                    val parsed = filtered.toDoubleOrNull() ?: 0.0
+                                                    lineItems[index] = item.copy(
+                                                        quantity = parsed,
+                                                        quantityText = filtered
+                                                    )
+                                                },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                singleLine = true,
+                                                modifier = Modifier.width(68.dp),
+                                                textStyle = LocalTextStyle.current.copy(
+                                                    textAlign = TextAlign.Center,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp
+                                                ),
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+
+                                            IconButton(
+                                                onClick = {
+                                                    val newQ = item.quantity + 1.0
+                                                    lineItems[index] = item.copy(
+                                                        quantity = newQ,
+                                                        quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .background(Color(0xFFF1EFE9), CircleShape)
+                                            ) {
+                                                Icon(Icons.Default.Add, contentDescription = "Increase", tint = Color(0xFF191919), modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+
+                                        // Item total amount
+                                        Text(
+                                            text = "₹" + String.format(Locale.ENGLISH, "%,.2f", item.lineTotalPaise / 100.0),
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF191919)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Automatic Customer Previous Balance (Include / Exclude)
+                    if (selectedCustomerId != null) {
+                        item {
+                            Surface(
+                                color = BillProTheme.colors.cardBackground,
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                            if (customerPastBalancePaise > 0) {
+                                                Text(
+                                                    "Past outstanding: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
+                                                    color = BillProTheme.colors.warning,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            } else {
+                                                Text("No past outstanding balance (₹0.00)", color = BillProTheme.colors.muted, fontSize = 11.sp)
+                                            }
+                                        }
+
+                                        if (customerPastBalancePaise > 0) {
+                                            Switch(
+                                                checked = includePreviousBalance,
+                                                onCheckedChange = { includePreviousBalance = it },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = Color(0xFF191919),
+                                                    checkedTrackColor = BillProTheme.colors.accent
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    if (customerPastBalancePaise > 0) {
+                                        Row(
                                             modifier = Modifier
-                                                .weight(1f)
-                                                .clickable { includePreviousBalance = true }
+                                                .fillMaxWidth()
+                                                .background(Color(0xFFF1EFE9), RoundedCornerShape(8.dp))
+                                                .padding(3.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (includePreviousBalance) BillProTheme.colors.accent else Color.Transparent,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clickable { includePreviousBalance = true }
                                         ) {
                                             Box(
                                                 modifier = Modifier.padding(vertical = 7.dp),
@@ -957,164 +1414,144 @@ private fun CreateInvoiceDialog(
                             }
                         }
                     }
-                }
 
-                // 5. Financial Calculation Summary
-                item {
-                    Surface(
-                        color = BillProTheme.colors.cardBackground,
-                        shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Subtotal:", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                Text("₹ " + String.format(Locale.ENGLISH, "%,.2f", subtotalPaise / 100.0), color = BillProTheme.colors.text, fontSize = 12.sp)
-                            }
-
-                            if (discountPaise > 0) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Discount:", color = BillProTheme.colors.muted, fontSize = 12.sp)
-                                    Text("- ₹ " + String.format(Locale.ENGLISH, "%,.2f", discountPaise / 100.0), color = BillProTheme.colors.success, fontSize = 12.sp)
-                                }
-                            }
-
-                            if (appliedPreviousBalancePaise > 0) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Previous Balance:", color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    Text("+ ₹ " + String.format(Locale.ENGLISH, "%,.2f", appliedPreviousBalancePaise / 100.0), color = BillProTheme.colors.warning, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            HorizontalDivider(color = BillProTheme.colors.cardBorder)
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                    // 5. Discount & Notes
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("NET PAYABLE:", color = BillProTheme.colors.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                Text(
-                                    "₹ " + String.format(Locale.ENGLISH, "%,.2f", totalAmountPaise / 100.0),
-                                    color = BillProTheme.colors.text,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
+                                Text("DISCOUNT & BILL NOTES", color = BillProTheme.colors.secondaryText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = discountText,
+                                        onValueChange = { discountText = it },
+                                        label = { Text("Discount (₹)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+
+                                    OutlinedTextField(
+                                        value = notes,
+                                        onValueChange = { notes = it },
+                                        label = { Text("Notes (Optional)") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // 6. Payment Details
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Payment Collection", color = BillProTheme.colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    // 6. Summary Breakdown
+                    item {
+                        Surface(
+                            color = Color.White,
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("FINANCIAL BREAKDOWN", color = BillProTheme.colors.secondaryText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
 
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = paidAmountText,
-                                onValueChange = { paidAmountText = it },
-                                label = { Text("Amount Paid (₹)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.weight(1f)
-                            )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Items Subtotal:", color = BillProTheme.colors.secondaryText, fontSize = 12.sp)
+                                    Text("₹" + String.format(Locale.ENGLISH, "%,.2f", subtotalPaise / 100.0), color = BillProTheme.colors.primaryText, fontSize = 12.sp)
+                                }
 
-                            // Quick Payment Mode chips
-                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("Payment Mode", color = BillProTheme.colors.muted, fontSize = 11.sp)
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    listOf("Cash", "UPI", "Credit").forEach { mode ->
-                                        FilterChip(
-                                            selected = paymentMode == mode,
-                                            onClick = { paymentMode = mode },
-                                            label = { Text(mode, fontSize = 10.sp) }
-                                        )
+                                if (discountPaise > 0) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Discount:", color = BillProTheme.colors.secondaryText, fontSize = 12.sp)
+                                        Text("- ₹" + String.format(Locale.ENGLISH, "%,.2f", discountPaise / 100.0), color = Color(0xFF24A36A), fontSize = 12.sp)
+                                    }
+                                }
+
+                                if (appliedPreviousBalancePaise > 0) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Previous Balance:", color = Color(0xFFE99A28), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("+ ₹" + String.format(Locale.ENGLISH, "%,.2f", appliedPreviousBalancePaise / 100.0), color = Color(0xFFE99A28), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                HorizontalDivider(color = Color(0xFFEBE8E0))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("NET PAYABLE:", color = BillProTheme.colors.primaryText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        "₹" + String.format(Locale.ENGLISH, "%,.2f", totalAmountPaise / 100.0),
+                                        color = BillProTheme.colors.primaryText,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 7. Payment Mode & Collection
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("PAYMENT COLLECTION", color = BillProTheme.colors.secondaryText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = paidAmountText,
+                                        onValueChange = { paidAmountText = it },
+                                        label = { Text("Amount Paid (₹)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+
+                                    Column(modifier = Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("Mode:", color = Color(0xFF777777), fontSize = 10.sp)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            listOf("Cash", "UPI", "Credit").forEach { mode ->
+                                                FilterChip(
+                                                    selected = paymentMode == mode,
+                                                    onClick = { paymentMode = mode },
+                                                    label = { Text(mode, fontSize = 10.sp) }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (lineItems.isEmpty()) {
-                        errorMessage = "Please add at least one item to the invoice"
-                        return@Button
-                    }
-                    val paidRupees = paidAmountText.toDoubleOrNull() ?: 0.0
-                    val paidPaise = (paidRupees * 100).toLong().coerceIn(0, totalAmountPaise)
-
-                    val status = when {
-                        paidPaise >= totalAmountPaise && totalAmountPaise > 0 -> "PAID"
-                        paidPaise > 0 -> "PARTIAL"
-                        else -> "UNPAID"
-                    }
-
-                    val now = System.currentTimeMillis()
-                    val invoice = InvoiceEntity(
-                        businessId = businessId,
-                        invoiceNumber = invoiceNumber.trim(),
-                        customerId = selectedCustomerId,
-                        createdAtEpochMs = now,
-                        placeOfSupplyStateCode = "",
-                        isInterState = false,
-                        subtotalPaise = subtotalPaise,
-                        cgstPaise = 0L,
-                        sgstPaise = 0L,
-                        igstPaise = 0L,
-                        discountPaise = discountPaise,
-                        previousBalancePaise = appliedPreviousBalancePaise,
-                        totalPaise = totalAmountPaise,
-                        paidPaise = paidPaise,
-                        status = status,
-                        notes = notes.trim()
-                    )
-
-                    val dbLines = lineItems.map { item ->
-                        InvoiceLineEntity(
-                            invoiceId = 0L,
-                            businessId = businessId,
-                            productId = item.product?.id,
-                            description = item.description,
-                            quantity = item.quantity,
-                            unitPricePaise = item.unitPricePaise,
-                            gstRatePercent = 0.0,
-                            taxableValuePaise = item.lineTotalPaise,
-                            taxPaise = 0L,
-                            lineTotalPaise = item.lineTotalPaise
-                        )
-                    }
-
-                    coroutineScope.launch {
-                        val newInvoiceId = dao.createInvoiceWithLines(
-                            invoice = invoice,
-                            lines = dbLines,
-                            decrementStock = true,
-                            recordCashbook = true
-                        )
-                        onInvoiceCreated(newInvoiceId)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BillProTheme.colors.accent,
-                    contentColor = Color(0xFF17130A)
-                )
-            ) {
-                Text("Generate Bill & Save", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = BillProTheme.colors.muted)
-            }
-        },
-        containerColor = BillProTheme.colors.surface,
-        shape = RoundedCornerShape(18.dp)
-    )
+        }
+    }
+}
 }
 
 // -----------------------------------------------------------------------------------------
