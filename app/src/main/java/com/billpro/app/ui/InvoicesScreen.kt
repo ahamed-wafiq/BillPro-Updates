@@ -55,6 +55,9 @@ fun InvoicesScreen(
     var selectedInvoiceForDetail by remember { mutableStateOf<InvoiceEntity?>(null) }
     var invoiceToCancel by remember { mutableStateOf<InvoiceEntity?>(null) }
     var invoiceForPayment by remember { mutableStateOf<InvoiceEntity?>(null) }
+    var invoiceForPrintPreview by remember { mutableStateOf<InvoiceEntity?>(null) }
+    var printLines by remember { mutableStateOf<List<InvoiceLineEntity>>(emptyList()) }
+    var storeProfileState by remember { mutableStateOf<StoreProfile?>(null) }
 
     val allInvoices by if (searchQuery.isBlank()) {
         dao.observeInvoices(businessId).collectAsState(initial = emptyList())
@@ -207,9 +210,9 @@ fun InvoicesScreen(
                         onClick = { selectedInvoiceForDetail = invoice },
                         onPrintReceipt = {
                             coroutineScope.launch {
-                                val lines = dao.getInvoiceLines(invoice.id, businessId)
-                                val store = StoreProfile.load(context, businessId)
-                                InvoicePdfGenerator.printInvoice80mm(context, invoice, lines, customer, store)
+                                printLines = dao.getInvoiceLines(invoice.id, businessId)
+                                storeProfileState = StoreProfile.load(context, businessId)
+                                invoiceForPrintPreview = invoice
                             }
                         },
                         onSharePdf = {
@@ -269,6 +272,14 @@ fun InvoicesScreen(
             invoice = invoice,
             customer = customer,
             onDismiss = { selectedInvoiceForDetail = null },
+            onPrintReceipt = { inv ->
+                selectedInvoiceForDetail = null
+                coroutineScope.launch {
+                    printLines = dao.getInvoiceLines(inv.id, businessId)
+                    storeProfileState = StoreProfile.load(context, businessId)
+                    invoiceForPrintPreview = inv
+                }
+            },
             onRecordPayment = {
                 invoiceForPayment = invoice
                 selectedInvoiceForDetail = null
@@ -276,6 +287,24 @@ fun InvoicesScreen(
             onCancelInvoice = {
                 invoiceToCancel = invoice
                 selectedInvoiceForDetail = null
+            }
+        )
+    }
+
+    // In-App 80mm Print Receipt Dialog
+    if (invoiceForPrintPreview != null && storeProfileState != null) {
+        val invoice = invoiceForPrintPreview!!
+        val customer = invoice.customerId?.let { customerMap[it] }
+        PrintReceiptDialog(
+            invoice = invoice,
+            lines = printLines,
+            customer = customer,
+            store = storeProfileState!!,
+            onDismiss = {
+                invoiceForPrintPreview = null
+            },
+            onPrintSuccess = {
+                invoiceForPrintPreview = null
             }
         )
     }
@@ -1058,6 +1087,7 @@ private fun InvoiceDetailDialog(
     invoice: InvoiceEntity,
     customer: CustomerEntity?,
     onDismiss: () -> Unit,
+    onPrintReceipt: (InvoiceEntity) -> Unit = {},
     onRecordPayment: () -> Unit,
     onCancelInvoice: () -> Unit
 ) {
@@ -1190,14 +1220,11 @@ private fun InvoiceDetailDialog(
                     }
                 }
 
-                // 80mm Thermal Receipt Print Button
+                // 80mm Thermal Receipt Print Button (Opens In-App Print Dialog)
                 item {
                     Button(
                         onClick = {
-                            coroutineScope.launch {
-                                val store = StoreProfile.load(context, businessId)
-                                InvoicePdfGenerator.printInvoice80mm(context, invoice, lines, customer, store)
-                            }
+                            onPrintReceipt(invoice)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent, contentColor = Color(0xFF191919)),
                         shape = RoundedCornerShape(12.dp),
