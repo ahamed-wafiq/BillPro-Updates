@@ -582,9 +582,8 @@ private fun CreateInvoiceDialog(
     var paymentMode by remember { mutableStateOf("Cash") }
     var notes by remember { mutableStateOf("") }
 
-    // Previous Balance states
+    // Previous Balance states: fully automatic from customer account
     var includePreviousBalance by remember { mutableStateOf(false) }
-    var previousBalanceText by remember { mutableStateOf("0") }
     var customerPastBalancePaise by remember { mutableStateOf(0L) }
 
     LaunchedEffect(selectedCustomerId) {
@@ -595,16 +594,9 @@ private fun CreateInvoiceDialog(
             val opening = cust?.openingBalancePaise ?: 0L
             val pastDue = (opening + unpaid).coerceAtLeast(0L)
             customerPastBalancePaise = pastDue
-            if (pastDue > 0) {
-                previousBalanceText = String.format(Locale.ENGLISH, "%.2f", pastDue / 100.0)
-                includePreviousBalance = true
-            } else {
-                previousBalanceText = "0"
-                includePreviousBalance = false
-            }
+            includePreviousBalance = pastDue > 0
         } else {
             customerPastBalancePaise = 0L
-            previousBalanceText = "0"
             includePreviousBalance = false
         }
     }
@@ -624,9 +616,8 @@ private fun CreateInvoiceDialog(
         (discountRupees * 100).toLong().coerceAtLeast(0)
     }
 
-    val appliedPreviousBalancePaise = if (includePreviousBalance) {
-        val amtRupees = previousBalanceText.toDoubleOrNull() ?: 0.0
-        (amtRupees * 100).toLong().coerceAtLeast(0L)
+    val appliedPreviousBalancePaise = if (selectedCustomerId != null && includePreviousBalance) {
+        customerPastBalancePaise
     } else 0L
 
     val totalAmountPaise = remember(subtotalPaise, discountPaise, appliedPreviousBalancePaise) {
@@ -872,48 +863,97 @@ private fun CreateInvoiceDialog(
                     )
                 }
 
-                // 4. Add Previous Balance Option
-                item {
-                    Surface(
-                        color = BillProTheme.colors.cardBackground,
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Add Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                // 4. Automatic Customer Previous Balance (Include / Exclude)
+                if (selectedCustomerId != null) {
+                    item {
+                        Surface(
+                            color = BillProTheme.colors.cardBackground,
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                        if (customerPastBalancePaise > 0) {
+                                            Text(
+                                                "Past outstanding: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
+                                                color = BillProTheme.colors.warning,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        } else {
+                                            Text("No past outstanding balance (₹0.00)", color = BillProTheme.colors.muted, fontSize = 11.sp)
+                                        }
+                                    }
+
                                     if (customerPastBalancePaise > 0) {
-                                        Text(
-                                            "Customer past dues: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
-                                            color = BillProTheme.colors.warning,
-                                            fontSize = 11.sp
+                                        Switch(
+                                            checked = includePreviousBalance,
+                                            onCheckedChange = { includePreviousBalance = it },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color(0xFF191919),
+                                                checkedTrackColor = BillProTheme.colors.accent
+                                            )
                                         )
-                                    } else {
-                                        Text("Include customer's past balance in this bill", color = BillProTheme.colors.muted, fontSize = 11.sp)
                                     }
                                 }
-                                Switch(
-                                    checked = includePreviousBalance,
-                                    onCheckedChange = { includePreviousBalance = it },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = BillProTheme.colors.accent)
-                                )
-                            }
 
-                            if (includePreviousBalance) {
-                                OutlinedTextField(
-                                    value = previousBalanceText,
-                                    onValueChange = { previousBalanceText = it },
-                                    label = { Text("Previous Balance Amount (₹)") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
+                                if (customerPastBalancePaise > 0) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFF1EFE9), RoundedCornerShape(8.dp))
+                                            .padding(3.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (includePreviousBalance) BillProTheme.colors.accent else Color.Transparent,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { includePreviousBalance = true }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.padding(vertical = 7.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "Include (+₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0) + ")",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (includePreviousBalance) FontWeight.Bold else FontWeight.Medium,
+                                                    color = Color(0xFF191919)
+                                                )
+                                            }
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (!includePreviousBalance) Color.White else Color.Transparent,
+                                            shadowElevation = if (!includePreviousBalance) 1.dp else 0.dp,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { includePreviousBalance = false }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.padding(vertical = 7.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "Exclude (₹0.00)",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (!includePreviousBalance) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (!includePreviousBalance) Color(0xFF191919) else Color(0xFF777777)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

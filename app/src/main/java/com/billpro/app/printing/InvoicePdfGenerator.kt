@@ -35,6 +35,21 @@ import java.util.Locale
 object InvoicePdfGenerator {
 
     /**
+     * Generates a clean, sanitized file name containing both customer name and invoice number.
+     * Example: mushfiq_INV-20261109-1627.pdf
+     */
+    fun getInvoicePdfFileName(invoice: InvoiceEntity, customer: CustomerEntity?, is80mm: Boolean = false): String {
+        val rawCustomer = customer?.name?.trim()?.takeIf { it.isNotBlank() } ?: "WalkIn"
+        val cleanCustomer = rawCustomer.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val cleanInvoice = invoice.invoiceNumber.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        return if (is80mm) {
+            "${cleanCustomer}_${cleanInvoice}_80mm.pdf"
+        } else {
+            "${cleanCustomer}_${cleanInvoice}.pdf"
+        }
+    }
+
+    /**
      * Standard A4 Invoice PDF Generator
      */
     fun generateInvoicePdf(
@@ -49,8 +64,8 @@ object InvoicePdfGenerator {
             invoiceDir.mkdirs()
         }
 
-        val sanitizedNumber = invoice.invoiceNumber.replace("[^a-zA-Z0-9-]".toRegex(), "_")
-        val pdfFile = File(invoiceDir, "${sanitizedNumber}.pdf")
+        val fileName = getInvoicePdfFileName(invoice, customer, is80mm = false)
+        val pdfFile = File(invoiceDir, fileName)
 
         val document = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // Standard A4 (points)
@@ -259,8 +274,8 @@ object InvoicePdfGenerator {
             invoiceDir.mkdirs()
         }
 
-        val sanitizedNumber = invoice.invoiceNumber.replace("[^a-zA-Z0-9-]".toRegex(), "_")
-        val pdfFile = File(invoiceDir, "${sanitizedNumber}_80mm.pdf")
+        val fileName = getInvoicePdfFileName(invoice, customer, is80mm = true)
+        val pdfFile = File(invoiceDir, fileName)
 
         // 80mm = ~227 points width. Calculate dynamic height.
         val dynamicHeight = (280 + (lines.size * 22)).coerceAtLeast(360)
@@ -462,7 +477,8 @@ object InvoicePdfGenerator {
                         callback?.onLayoutCancelled()
                         return
                     }
-                    val pdi = PrintDocumentInfo.Builder("${invoice.invoiceNumber}_80mm.pdf")
+                    val fileName = getInvoicePdfFileName(invoice, customer, is80mm = true)
+                    val pdi = PrintDocumentInfo.Builder(fileName)
                         .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
                         .setPageCount(1)
                         .build()
