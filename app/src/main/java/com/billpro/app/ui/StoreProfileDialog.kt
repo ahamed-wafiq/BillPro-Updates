@@ -269,16 +269,47 @@ fun StoreProfileDialog(
                                             }
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BillProTheme.colors.accent, contentColor = Color(0xFF191919)),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     if (syncStatus is SyncStatus.Syncing) {
-                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        CircularProgressIndicator(color = Color(0xFF191919), modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                                         Spacer(Modifier.width(8.dp))
-                                        Text("Syncing...", fontSize = 12.sp)
+                                        Text("Backing up to Cloud...", fontSize = 12.sp, color = Color(0xFF191919))
                                     } else {
-                                        Text("Sync Now with Cloud Firestore", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF191919))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Backup Data to Cloud", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919))
+                                    }
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        syncStatus = SyncStatus.Restoring
+                                        coroutineScope.launch {
+                                            val mgr = BusinessSyncManager(context, dao)
+                                            val res = mgr.restoreBusinessDataFromCloud(businessId)
+                                            syncStatus = res
+                                            when (res) {
+                                                is SyncStatus.Success -> Toast.makeText(context, res.message, Toast.LENGTH_SHORT).show()
+                                                is SyncStatus.Offline -> Toast.makeText(context, res.reason, Toast.LENGTH_LONG).show()
+                                                is SyncStatus.Error -> Toast.makeText(context, res.error, Toast.LENGTH_LONG).show()
+                                                else -> {}
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (syncStatus is SyncStatus.Restoring) {
+                                        CircularProgressIndicator(color = BillProTheme.colors.primaryText, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Restoring from Cloud...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Restore from Cloud Firestore", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }

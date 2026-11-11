@@ -35,6 +35,11 @@ import com.billpro.app.data.InvoiceEntity
 import com.billpro.app.data.InvoiceLineEntity
 import java.util.Calendar
 import com.billpro.app.data.ProductEntity
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.billpro.app.sync.BusinessSyncManager
+import com.billpro.app.sync.SyncStatus
+import kotlinx.coroutines.flow.first
 import com.billpro.app.ui.*
 import com.billpro.app.ui.auth.AuthScreen
 import com.billpro.app.ui.components.*
@@ -94,6 +99,19 @@ private fun BillProApp(
     session: UserSession,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
+    LaunchedEffect(session.businessId) {
+        val invoices = dao.observeInvoices(session.businessId).first()
+        val products = dao.observeProducts(session.businessId).first()
+        if (invoices.isEmpty() && products.isEmpty()) {
+            val syncMgr = BusinessSyncManager(context, dao)
+            val res = syncMgr.restoreBusinessDataFromCloud(session.businessId)
+            if (res is SyncStatus.Success) {
+                Toast.makeText(context, "Business data restored from cloud!", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     var selected by remember { mutableStateOf(Tab.Home) }
     var shouldOpenCreateBillDirectly by remember { mutableStateOf(false) }
     var shouldOpenAddProductDirectly by remember { mutableStateOf(false) }
