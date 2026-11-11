@@ -153,7 +153,19 @@ interface BillProDao {
     @Query("SELECT * FROM invoices WHERE businessId = :businessId AND status = :status ORDER BY createdAtEpochMs DESC")
     fun observeInvoicesByStatus(businessId: String, status: String): Flow<List<InvoiceEntity>>
 
-    @Query("SELECT * FROM invoices WHERE businessId = :businessId AND (invoiceNumber LIKE '%' || :query || '%' OR notes LIKE '%' || :query || '%') ORDER BY createdAtEpochMs DESC")
+    @Query("""
+        SELECT DISTINCT i.* FROM invoices i
+        LEFT JOIN customers c ON i.customerId = c.id
+        WHERE i.businessId = :businessId 
+          AND (
+              i.invoiceNumber LIKE '%' || :query || '%' 
+              OR i.notes LIKE '%' || :query || '%'
+              OR (c.name IS NOT NULL AND c.name LIKE '%' || :query || '%')
+              OR (c.phone IS NOT NULL AND c.phone LIKE '%' || :query || '%')
+              OR (i.customerId IS NULL AND ('walk-in' LIKE '%' || :query || '%' OR 'cash' LIKE '%' || :query || '%'))
+          )
+        ORDER BY i.createdAtEpochMs DESC
+    """)
     fun searchInvoices(businessId: String, query: String): Flow<List<InvoiceEntity>>
 
     @Query("SELECT * FROM invoices WHERE id = :id AND businessId = :businessId LIMIT 1")

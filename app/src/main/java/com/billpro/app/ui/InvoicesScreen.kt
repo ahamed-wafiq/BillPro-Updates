@@ -1,5 +1,7 @@
 package com.billpro.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -55,7 +57,12 @@ fun InvoicesScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf("ALL") } // ALL, PAID, PARTIAL, UNPAID, CANCELLED
 
-    var isCreateDialogOpen by remember { mutableStateOf(initialOpenCreate) }
+    var isCreateDialogOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(initialOpenCreate) {
+        if (initialOpenCreate) {
+            isCreateDialogOpen = true
+        }
+    }
     var selectedInvoiceForDetail by remember { mutableStateOf<InvoiceEntity?>(null) }
     var invoiceToCancel by remember { mutableStateOf<InvoiceEntity?>(null) }
     var invoiceForPayment by remember { mutableStateOf<InvoiceEntity?>(null) }
@@ -109,7 +116,7 @@ fun InvoicesScreen(
                             SearchBar(
                                 query = searchQuery,
                                 onQueryChange = { searchQuery = it },
-                                placeholder = "Search invoice # or notes..."
+                                placeholder = "Search customer, phone, invoice #..."
                             )
                         }
 
@@ -212,6 +219,13 @@ fun InvoicesScreen(
                         invoice = invoice,
                         customerName = customer?.name ?: "Walk-in Customer",
                         onClick = { selectedInvoiceForDetail = invoice },
+                        onCopyBillText = {
+                            coroutineScope.launch {
+                                val lines = dao.getInvoiceLines(invoice.id, businessId)
+                                val store = StoreProfile.load(context, businessId)
+                                copyBillToClipboard(context, invoice, lines, customer, store)
+                            }
+                        },
                         onPrintReceipt = {
                             coroutineScope.launch {
                                 printLines = dao.getInvoiceLines(invoice.id, businessId)
@@ -372,6 +386,7 @@ private fun InvoiceCard(
     invoice: InvoiceEntity,
     customerName: String,
     onClick: () -> Unit,
+    onCopyBillText: () -> Unit,
     onPrintReceipt: () -> Unit,
     onSharePdf: () -> Unit,
     onDownloadPdf: () -> Unit
@@ -499,6 +514,21 @@ private fun InvoiceCard(
                         maxLines = 1,
                         softWrap = false
                     )
+
+                    // Copy bill text for WhatsApp button
+                    IconButton(
+                        onClick = onCopyBillText,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(BillProTheme.colors.surfaceVariant, CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = "Copy Bill for WhatsApp",
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
 
                     // 80mm Print receipt button
                     IconButton(
@@ -1765,6 +1795,46 @@ private fun InvoiceDetailDialog(
                     }
                 }
 
+                // Copy Bill for WhatsApp button
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFE8F5E9),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF81C784)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                coroutineScope.launch {
+                                    val store = StoreProfile.load(context, businessId)
+                                    copyBillToClipboard(context, invoice, lines, customer, store)
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                tint = Color(0xFF2E7D32),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Copy Bill (Ready for WhatsApp)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1B5E20)
+                            )
+                        }
+                    }
+                }
+
                 // 80mm Thermal Receipt Print Button (Opens In-App Print Dialog)
                 item {
                     Button(
@@ -1930,4 +2000,83 @@ private fun RecordPaymentDialog(
         containerColor = BillProTheme.colors.surface,
         shape = RoundedCornerShape(16.dp)
     )
+}
+
+// -----------------------------------------------------------------------------------------
+// TEXT BILL FORMATTING & WHATSAPP COPY UTILITIES
+// -----------------------------------------------------------------------------------------
+private fun formatInvoiceAsText(
+    invoice: InvoiceEntity,
+    lines: List<InvoiceLineEntity>,
+    customer: CustomerEntity?,
+    store: StoreProfile
+): String {
+    val dateStr = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(invoice.createdAtEpochMs))
+    val sb = StringBuilder()
+    sb.append("🧾 *BILLPRO RECEIPT: ${invoice.invoiceNumber}*\n")
+    if (store.storeName.isNotBlank()) {
+        sb.append("🏪 *${store.storeName}*\n")
+    }
+    if (store.phone.isNotBlank()) {
+        sb.append("📞 Contact: ${store.phone}\n")
+    }
+    if (store.gstin.isNotBlank()) {
+        sb.append("🔖 GSTIN: ${store.gstin}\n")
+    }
+    sb.append("📅 Date: $dateStr\n")
+    val custName = customer?.name ?: if (invoice.customerId == null) "Walk-in Customer" else "Customer"
+    val custPhone = customer?.phone?.takeIf { it.isNotBlank() }
+    sb.append("👤 Billed To: $custName")
+    if (custPhone != null) {
+        sb.append(" ($custPhone)")
+    }
+    sb.append("\n\n─────────────────────\n")
+    sb.append("*ITEMS BREAKDOWN*\n")
+    sb.append("─────────────────────\n")
+
+    lines.forEachIndexed { i, line ->
+        val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
+        val rateText = String.format(Locale.ENGLISH, "%.2f", line.unitPricePaise / 100.0)
+        val totalText = String.format(Locale.ENGLISH, "%.2f", line.lineTotalPaise / 100.0)
+        sb.append("${i + 1}. *${line.description}*\n")
+        sb.append("   $qtyText × ₹$rateText = *₹$totalText*\n")
+    }
+
+    sb.append("─────────────────────\n")
+    sb.append("*Subtotal:* ₹${String.format(Locale.ENGLISH, "%.2f", invoice.subtotalPaise / 100.0)}\n")
+    if (invoice.discountPaise > 0) {
+        sb.append("*Discount:* -₹${String.format(Locale.ENGLISH, "%.2f", invoice.discountPaise / 100.0)}\n")
+    }
+    if (invoice.previousBalancePaise > 0) {
+        sb.append("*Previous Balance:* +₹${String.format(Locale.ENGLISH, "%.2f", invoice.previousBalancePaise / 100.0)}\n")
+    }
+    sb.append("*Total Amount:* *₹${String.format(Locale.ENGLISH, "%.2f", invoice.totalPaise / 100.0)}*\n")
+    sb.append("*Amount Paid:* ₹${String.format(Locale.ENGLISH, "%.2f", invoice.paidPaise / 100.0)}\n")
+    val due = (invoice.totalPaise - invoice.paidPaise).coerceAtLeast(0L)
+    if (due > 0 && invoice.status != "CANCELLED") {
+        sb.append("*Balance Due:* *₹${String.format(Locale.ENGLISH, "%.2f", due / 100.0)}* (PENDING)\n")
+    } else {
+        sb.append("*Status:* PAID ✅\n")
+    }
+    sb.append("─────────────────────\n")
+
+    if (store.termsAndConditions.isNotBlank()) {
+        sb.append("\n_${store.termsAndConditions}_\n")
+    }
+    sb.append("🙏 _Thank you for your business!_")
+    return sb.toString()
+}
+
+private fun copyBillToClipboard(
+    context: Context,
+    invoice: InvoiceEntity,
+    lines: List<InvoiceLineEntity>,
+    customer: CustomerEntity?,
+    store: StoreProfile
+) {
+    val text = formatInvoiceAsText(invoice, lines, customer, store)
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("Invoice ${invoice.invoiceNumber}", text)
+    clipboard.setPrimaryClip(clip)
+    Toast.makeText(context, "Bill copied! Ready to paste into WhatsApp 📋", Toast.LENGTH_SHORT).show()
 }

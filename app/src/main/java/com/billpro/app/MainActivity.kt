@@ -200,8 +200,8 @@ private fun BillProApp(
                 }
             },
             onCentralActionClick = {
-                // Central yellow elevated flash button opens Invoices & Create Bill
-                shouldOpenCreateBillDirectly = true
+                // Central yellow elevated flash button opens Invoices & Billing list
+                shouldOpenCreateBillDirectly = false
                 selected = Tab.Invoices
             },
             modifier = Modifier.align(Alignment.BottomCenter)
