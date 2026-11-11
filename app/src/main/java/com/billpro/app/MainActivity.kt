@@ -33,6 +33,7 @@ import com.billpro.app.data.BillProDatabase
 import com.billpro.app.data.CustomerEntity
 import com.billpro.app.data.InvoiceEntity
 import com.billpro.app.data.InvoiceLineEntity
+import java.util.Calendar
 import com.billpro.app.data.ProductEntity
 import com.billpro.app.ui.*
 import com.billpro.app.ui.auth.AuthScreen
@@ -232,6 +233,20 @@ private fun Dashboard(
     onOpenStoreProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val todayRange = remember {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val start = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, 1)
+        val end = cal.timeInMillis
+        start to end
+    }
+
+    val todaySalesPaise by dao.observeInvoiceTotalForPeriod(session.businessId, todayRange.first, todayRange.second).collectAsState(initial = 0L)
+    val todayInvoicesCount by dao.observeInvoiceCountForPeriod(session.businessId, todayRange.first, todayRange.second).collectAsState(initial = 0)
     val totalSalesPaise by dao.observeTotalSales(session.businessId).collectAsState(initial = 0L)
     val totalInvoicesCount by dao.observeTotalInvoicesCount(session.businessId).collectAsState(initial = 0)
     val pendingPaymentsPaise by dao.observePendingPayments(session.businessId).collectAsState(initial = 0L)
@@ -263,14 +278,14 @@ private fun Dashboard(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // 2. White Rounded Dashboard Stat Card with metric rings
             item {
                 DashboardStatCard(
-                    todaySalesFormatted = formatCurrency(totalSalesPaise),
-                    todayInvoicesCount = totalInvoicesCount,
+                    todaySalesFormatted = formatCurrency(todaySalesPaise),
+                    todayInvoicesCount = todayInvoicesCount,
                     lowStockCount = lowStockCount,
                     inventoryCount = productCount,
                     onInventoryClick = { onNavigate(Tab.Inventory) }
@@ -597,8 +612,8 @@ private fun RecentInvoiceRow(
         ) {
             Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp),
+                    .weight(1f, fill = false)
+                    .padding(end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -619,7 +634,7 @@ private fun RecentInvoiceRow(
                 }
 
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
@@ -642,7 +657,8 @@ private fun RecentInvoiceRow(
 
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                modifier = Modifier.wrapContentWidth(Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Status pill
                 val (statusColor, containerColor) = when (invoice.status) {
@@ -662,7 +678,7 @@ private fun RecentInvoiceRow(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         softWrap = false,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
 

@@ -213,6 +213,30 @@ interface BillProDao {
     @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
     fun observeInvoiceTotalForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
 
+    @Query("SELECT COUNT(*) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeInvoiceCountForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Int>
+
+    @Query("SELECT COALESCE(SUM(totalPaise - paidPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND totalPaise > paidPaise AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observePendingPaymentsForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM cashbook_entries WHERE businessId = :businessId AND direction = 'IN' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeCashInForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM cashbook_entries WHERE businessId = :businessId AND direction = 'OUT' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeCashOutForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(cgstPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeCgstForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(sgstPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeSgstForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(igstPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeIgstForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(subtotalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    fun observeTaxableValueForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
+
     @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED'")
     fun observeTotalSales(businessId: String): Flow<Long>
 

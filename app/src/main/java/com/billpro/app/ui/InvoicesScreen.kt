@@ -34,6 +34,7 @@ import com.billpro.app.printing.InvoicePdfGenerator
 import com.billpro.app.ui.components.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -94,7 +95,7 @@ fun InvoicesScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Header with Search and New Bill Action
@@ -557,7 +558,8 @@ private data class DraftLineItem(
     val description: String,
     val quantity: Double,
     val unitPricePaise: Long,
-    val quantityText: String = if (quantity % 1.0 == 0.0) quantity.toInt().toString() else "%.1f".format(quantity)
+    val quantityText: String = if (quantity % 1.0 == 0.0) quantity.toInt().toString() else "%.1f".format(quantity),
+    val rateText: String = String.format(Locale.ENGLISH, "%.2f", unitPricePaise / 100.0)
 ) {
     val lineTotalPaise: Long
         get() = (quantity * unitPricePaise).toLong()
@@ -575,12 +577,21 @@ private fun CreateInvoiceDialog(
     val coroutineScope = rememberCoroutineScope()
     val availableProducts by dao.observeProducts(businessId).collectAsState(initial = emptyList())
 
-    val autoInvoiceNo = remember {
+    var billDateOption by remember { mutableStateOf("TODAY") } // "TODAY" or "YESTERDAY"
+
+    val autoInvoiceNo = remember(billDateOption) {
+        val cal = Calendar.getInstance()
+        if (billDateOption == "YESTERDAY") {
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
         val sdf = SimpleDateFormat("yyyyMMdd-HHmm", Locale.getDefault())
-        "INV-${sdf.format(Date())}"
+        "INV-${sdf.format(cal.time)}"
     }
 
     var invoiceNumber by remember { mutableStateOf(autoInvoiceNo) }
+    LaunchedEffect(autoInvoiceNo) {
+        invoiceNumber = autoInvoiceNo
+    }
     var selectedCustomerId by remember { mutableStateOf<Long?>(null) }
     var customerSearchQuery by remember { mutableStateOf("") }
     var productSearchQuery by remember { mutableStateOf("") }
@@ -776,12 +787,19 @@ private fun CreateInvoiceDialog(
                                         else -> "UNPAID"
                                     }
 
-                                    val now = System.currentTimeMillis()
+                                    val billCreatedAtEpochMs = if (billDateOption == "YESTERDAY") {
+                                        val cal = Calendar.getInstance()
+                                        cal.add(Calendar.DAY_OF_YEAR, -1)
+                                        cal.timeInMillis
+                                    } else {
+                                        System.currentTimeMillis()
+                                    }
+
                                     val invoice = InvoiceEntity(
                                         businessId = businessId,
                                         invoiceNumber = invoiceNumber.trim(),
                                         customerId = selectedCustomerId,
-                                        createdAtEpochMs = now,
+                                        createdAtEpochMs = billCreatedAtEpochMs,
                                         placeOfSupplyStateCode = "",
                                         isInterState = false,
                                         subtotalPaise = subtotalPaise,
@@ -860,6 +878,70 @@ private fun CreateInvoiceDialog(
                                     Icon(Icons.Default.Error, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(errorMessage!!, color = Color(0xFFB71C1C), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Bill Date Selector (Today / Yesterday)
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEBE8E0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "BILL DATE",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BillProTheme.colors.secondaryText,
+                                        letterSpacing = 1.sp
+                                    )
+                                    val formattedDate = remember(billDateOption) {
+                                        val cal = Calendar.getInstance()
+                                        if (billDateOption == "YESTERDAY") cal.add(Calendar.DAY_OF_YEAR, -1)
+                                        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(cal.time)
+                                    }
+                                    Text(
+                                        text = formattedDate,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = BillProTheme.colors.primaryText
+                                    )
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(
+                                        selected = billDateOption == "TODAY",
+                                        onClick = { billDateOption = "TODAY" },
+                                        label = { Text("Today", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = BillProTheme.colors.primaryYellow,
+                                            selectedLabelColor = Color(0xFF191919),
+                                            containerColor = Color(0xFFF7F6F2),
+                                            labelColor = Color(0xFF555555)
+                                        )
+                                    )
+                                    FilterChip(
+                                        selected = billDateOption == "YESTERDAY",
+                                        onClick = { billDateOption = "YESTERDAY" },
+                                        label = { Text("Yesterday", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = BillProTheme.colors.primaryYellow,
+                                            selectedLabelColor = Color(0xFF191919),
+                                            containerColor = Color(0xFFF7F6F2),
+                                            labelColor = Color(0xFF555555)
+                                        )
+                                    )
                                 }
                             }
                         }
@@ -1198,26 +1280,21 @@ private fun CreateInvoiceDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
+                                    // Header: Item Description & Delete Button
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.description,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF191919)
-                                            )
-                                            Text(
-                                                text = "Unit Rate: ₹" + String.format(Locale.ENGLISH, "%.2f", item.unitPricePaise / 100.0),
-                                                fontSize = 11.sp,
-                                                color = Color(0xFF777777)
-                                            )
-                                        }
+                                        Text(
+                                            text = item.description,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF191919),
+                                            modifier = Modifier.weight(1f)
+                                        )
 
                                         IconButton(
                                             onClick = { lineItems.removeAt(index) },
@@ -1227,93 +1304,84 @@ private fun CreateInvoiceDialog(
                                                 Icons.Default.DeleteOutline,
                                                 contentDescription = "Remove Item",
                                                 tint = Color(0xFFE34B4B),
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
 
+                                    // Editable Inputs: Rate (₹) & Units (Qty) side-by-side, plus line total
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Quantity Direct Text Area / Input Box
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        // Editable Rate (₹)
+                                        OutlinedTextField(
+                                            value = item.rateText,
+                                            onValueChange = { newRateStr ->
+                                                val filtered = newRateStr.filter { it.isDigit() || it == '.' }
+                                                val rateRupees = filtered.toDoubleOrNull() ?: 0.0
+                                                val ratePaise = (rateRupees * 100).toLong().coerceAtLeast(0L)
+                                                lineItems[index] = item.copy(
+                                                    unitPricePaise = ratePaise,
+                                                    rateText = filtered
+                                                )
+                                            },
+                                            label = { Text("Rate (₹)", fontSize = 11.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1.1f),
+                                            textStyle = LocalTextStyle.current.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+
+                                        // Editable Units / Quantity
+                                        OutlinedTextField(
+                                            value = item.quantityText,
+                                            onValueChange = { newQStr ->
+                                                val filtered = newQStr.filter { it.isDigit() || it == '.' }
+                                                val parsedQ = filtered.toDoubleOrNull() ?: 0.0
+                                                lineItems[index] = item.copy(
+                                                    quantity = parsedQ,
+                                                    quantityText = filtered
+                                                )
+                                            },
+                                            label = { Text("Units", fontSize = 11.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            singleLine = true,
+                                            modifier = Modifier.weight(1f),
+                                            textStyle = LocalTextStyle.current.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+
+                                        // Line Total
+                                        Column(
+                                            horizontalAlignment = Alignment.End,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(start = 4.dp)
                                         ) {
                                             Text(
-                                                text = "Units:",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color(0xFF555555)
+                                                text = "Total",
+                                                fontSize = 10.sp,
+                                                color = Color(0xFF888888),
+                                                fontWeight = FontWeight.Medium
                                             )
-
-                                            IconButton(
-                                                onClick = {
-                                                    val current = item.quantity
-                                                    if (current > 1.0) {
-                                                        val newQ = current - 1.0
-                                                        lineItems[index] = item.copy(
-                                                            quantity = newQ,
-                                                            quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
-                                                        )
-                                                    } else {
-                                                        lineItems.removeAt(index)
-                                                    }
-                                                },
-                                                modifier = Modifier
-                                                    .size(30.dp)
-                                                    .background(Color(0xFFF1EFE9), CircleShape)
-                                            ) {
-                                                Icon(Icons.Default.Remove, contentDescription = "Decrease", tint = Color(0xFF191919), modifier = Modifier.size(14.dp))
-                                            }
-
-                                            // Direct Text Area where user can enter any unit / quantity
-                                            OutlinedTextField(
-                                                value = item.quantityText,
-                                                onValueChange = { newText ->
-                                                    val filtered = newText.filter { it.isDigit() || it == '.' }
-                                                    val parsed = filtered.toDoubleOrNull() ?: 0.0
-                                                    lineItems[index] = item.copy(
-                                                        quantity = parsed,
-                                                        quantityText = filtered
-                                                    )
-                                                },
-                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                                singleLine = true,
-                                                modifier = Modifier.width(68.dp),
-                                                textStyle = LocalTextStyle.current.copy(
-                                                    textAlign = TextAlign.Center,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 13.sp
-                                                ),
-                                                shape = RoundedCornerShape(8.dp)
+                                            Text(
+                                                text = "₹" + String.format(Locale.ENGLISH, "%,.2f", item.lineTotalPaise / 100.0),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF191919),
+                                                maxLines = 1,
+                                                softWrap = false
                                             )
-
-                                            IconButton(
-                                                onClick = {
-                                                    val newQ = item.quantity + 1.0
-                                                    lineItems[index] = item.copy(
-                                                        quantity = newQ,
-                                                        quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
-                                                    )
-                                                },
-                                                modifier = Modifier
-                                                    .size(30.dp)
-                                                    .background(Color(0xFFF1EFE9), CircleShape)
-                                            ) {
-                                                Icon(Icons.Default.Add, contentDescription = "Increase", tint = Color(0xFF191919), modifier = Modifier.size(14.dp))
-                                            }
                                         }
-
-                                        // Item total amount
-                                        Text(
-                                            text = "₹" + String.format(Locale.ENGLISH, "%,.2f", item.lineTotalPaise / 100.0),
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF191919)
-                                        )
                                     }
                                 }
                             }

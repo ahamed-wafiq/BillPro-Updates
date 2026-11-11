@@ -199,7 +199,7 @@ fun InventoryScreen(
             if (activeTab == 0) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // Search Bar and Add Button Header
@@ -293,7 +293,7 @@ fun InventoryScreen(
                 // TAB 1: INVENTORY STOCK LEDGER
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 100.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     // Summary KPIs

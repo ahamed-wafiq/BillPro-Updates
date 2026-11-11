@@ -34,17 +34,103 @@ fun ReportsScreen(
 ) {
     var selectedPeriod by remember { mutableStateOf("THIS_MONTH") } // TODAY, THIS_WEEK, THIS_MONTH, ALL_TIME
 
-    val totalSalesPaise by dao.observeTotalSales(businessId).collectAsState(initial = 0L)
-    val totalInvoicesCount by dao.observeTotalInvoicesCount(businessId).collectAsState(initial = 0)
-    val pendingPaymentsPaise by dao.observePendingPayments(businessId).collectAsState(initial = 0L)
-    val totalCgst by dao.observeTotalCgst(businessId).collectAsState(initial = 0L)
-    val totalSgst by dao.observeTotalSgst(businessId).collectAsState(initial = 0L)
-    val totalIgst by dao.observeTotalIgst(businessId).collectAsState(initial = 0L)
-    val totalTaxable by dao.observeTotalTaxableValue(businessId).collectAsState(initial = 0L)
+    val periodRange = remember(selectedPeriod) {
+        val cal = Calendar.getInstance()
+        when (selectedPeriod) {
+            "TODAY" -> {
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                cal.add(Calendar.DAY_OF_YEAR, 1)
+                val end = cal.timeInMillis
+                start to end
+            }
+            "THIS_WEEK" -> {
+                cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                cal.add(Calendar.DAY_OF_YEAR, 7)
+                val end = cal.timeInMillis
+                start to end
+            }
+            "THIS_MONTH" -> {
+                cal.set(Calendar.DAY_OF_MONTH, 1)
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val start = cal.timeInMillis
+                cal.add(Calendar.MONTH, 1)
+                val end = cal.timeInMillis
+                start to end
+            }
+            else -> {
+                0L to Long.MAX_VALUE
+            }
+        }
+    }
+
+    val totalSalesPaise by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalSales(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeInvoiceTotalForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalInvoicesCount by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalInvoicesCount(businessId).collectAsState(initial = 0)
+    } else {
+        dao.observeInvoiceCountForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0)
+    }
+
+    val pendingPaymentsPaise by if (selectedPeriod == "ALL_TIME") {
+        dao.observePendingPayments(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observePendingPaymentsForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalCgst by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalCgst(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeCgstForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalSgst by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalSgst(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeSgstForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalIgst by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalIgst(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeIgstForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalTaxable by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalTaxableValue(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeTaxableValueForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
     val totalGstPaise = totalCgst + totalSgst + totalIgst
 
-    val totalCashIn by dao.observeTotalCashIn(businessId).collectAsState(initial = 0L)
-    val totalCashOut by dao.observeTotalCashOut(businessId).collectAsState(initial = 0L)
+    val totalCashIn by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalCashIn(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeCashInForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
+    val totalCashOut by if (selectedPeriod == "ALL_TIME") {
+        dao.observeTotalCashOut(businessId).collectAsState(initial = 0L)
+    } else {
+        dao.observeCashOutForPeriod(businessId, periodRange.first, periodRange.second).collectAsState(initial = 0L)
+    }
+
     val netProfitPaise = totalCashIn - totalCashOut
 
     val lowStockCount by dao.observeLowStockCount(businessId).collectAsState(initial = 0)
@@ -65,7 +151,7 @@ fun ReportsScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Period Filter Chips

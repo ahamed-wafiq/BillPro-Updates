@@ -89,7 +89,7 @@ fun CashbookScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 2. Filter Pills row inspired by reference's "Paid [12]" and "Unpaid [5]"
