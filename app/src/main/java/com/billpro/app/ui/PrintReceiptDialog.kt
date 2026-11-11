@@ -659,7 +659,7 @@ fun PrintReceiptDialog(
                         } else {
                             Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("PRINT RECEIPT", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Print", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

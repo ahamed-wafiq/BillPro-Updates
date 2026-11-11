@@ -524,13 +524,13 @@ private fun InvoiceCard(
                     ) {
                         Icon(
                             Icons.Default.ContentCopy,
-                            contentDescription = "Copy Bill for WhatsApp",
+                            contentDescription = "Copy Bill",
                             tint = Color(0xFF2E7D32),
                             modifier = Modifier.size(15.dp)
                         )
                     }
 
-                    // 80mm Print receipt button
+                    // Print button
                     IconButton(
                         onClick = onPrintReceipt,
                         modifier = Modifier
@@ -539,7 +539,7 @@ private fun InvoiceCard(
                     ) {
                         Icon(
                             Icons.Default.Print,
-                            contentDescription = "Print 80mm Receipt",
+                            contentDescription = "Print",
                             tint = Color(0xFF191919),
                             modifier = Modifier.size(16.dp)
                         )
@@ -1826,7 +1826,7 @@ private fun InvoiceDetailDialog(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Copy Bill (Ready for WhatsApp)",
+                                text = "Copy Bill",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1B5E20)
@@ -1847,7 +1847,7 @@ private fun InvoiceDetailDialog(
                     ) {
                         Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Print Receipt (80mm Thermal)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Print", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2011,59 +2011,63 @@ private fun formatInvoiceAsText(
     customer: CustomerEntity?,
     store: StoreProfile
 ): String {
-    val dateStr = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(invoice.createdAtEpochMs))
+    val dateStr = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale.getDefault()).format(Date(invoice.createdAtEpochMs))
     val sb = StringBuilder()
-    sb.append("🧾 *BILLPRO RECEIPT: ${invoice.invoiceNumber}*\n")
     if (store.storeName.isNotBlank()) {
-        sb.append("🏪 *${store.storeName}*\n")
+        sb.append(store.storeName.trim()).append("\n")
+    }
+    if (store.address.isNotBlank()) {
+        sb.append(store.address.trim()).append("\n")
     }
     if (store.phone.isNotBlank()) {
-        sb.append("📞 Contact: ${store.phone}\n")
+        sb.append("Tel: ").append(store.phone.trim()).append("\n")
     }
     if (store.gstin.isNotBlank()) {
-        sb.append("🔖 GSTIN: ${store.gstin}\n")
+        sb.append("GSTIN: ").append(store.gstin.trim()).append("\n")
     }
-    sb.append("📅 Date: $dateStr\n")
-    val custName = customer?.name ?: if (invoice.customerId == null) "Walk-in Customer" else "Customer"
-    val custPhone = customer?.phone?.takeIf { it.isNotBlank() }
-    sb.append("👤 Billed To: $custName")
+
+    val divider = "----------------------------------------"
+    sb.append(divider).append("\n")
+    sb.append("Inv: ").append(invoice.invoiceNumber).append("   ").append(dateStr).append("\n")
+    val custName = customer?.name?.trim() ?: if (invoice.customerId == null) "Walk-in Customer" else "Customer"
+    val custPhone = customer?.phone?.trim()?.takeIf { it.isNotBlank() }
+    sb.append("Customer: ").append(custName)
     if (custPhone != null) {
-        sb.append(" ($custPhone)")
+        sb.append(" (").append(custPhone).append(")")
     }
-    sb.append("\n\n─────────────────────\n")
-    sb.append("*ITEMS BREAKDOWN*\n")
-    sb.append("─────────────────────\n")
+    sb.append("\n")
+    sb.append(divider).append("\n")
+    sb.append(String.format(Locale.ENGLISH, "%-15s %5s %9s %8s\n", "ITEM", "QTY", "RATE", "AMOUNT"))
+    sb.append(divider).append("\n")
 
-    lines.forEachIndexed { i, line ->
+    for (line in lines) {
+        val desc = if (line.description.length > 15) line.description.take(14) + "…" else line.description
         val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
-        val rateText = String.format(Locale.ENGLISH, "%.2f", line.unitPricePaise / 100.0)
-        val totalText = String.format(Locale.ENGLISH, "%.2f", line.lineTotalPaise / 100.0)
-        sb.append("${i + 1}. *${line.description}*\n")
-        sb.append("   $qtyText × ₹$rateText = *₹$totalText*\n")
+        val rateText = String.format(Locale.ENGLISH, "₹%.2f", line.unitPricePaise / 100.0)
+        val totalText = String.format(Locale.ENGLISH, "₹%.2f", line.lineTotalPaise / 100.0)
+        sb.append(String.format(Locale.ENGLISH, "%-15s %5s %9s %8s\n", desc, qtyText, rateText, totalText))
     }
 
-    sb.append("─────────────────────\n")
-    sb.append("*Subtotal:* ₹${String.format(Locale.ENGLISH, "%.2f", invoice.subtotalPaise / 100.0)}\n")
+    sb.append(divider).append("\n")
+    sb.append(String.format(Locale.ENGLISH, "%-26s %13s\n", "Subtotal", String.format(Locale.ENGLISH, "₹%.2f", invoice.subtotalPaise / 100.0)))
     if (invoice.discountPaise > 0) {
-        sb.append("*Discount:* -₹${String.format(Locale.ENGLISH, "%.2f", invoice.discountPaise / 100.0)}\n")
+        sb.append(String.format(Locale.ENGLISH, "%-26s -%12s\n", "Discount", String.format(Locale.ENGLISH, "₹%.2f", invoice.discountPaise / 100.0)))
     }
     if (invoice.previousBalancePaise > 0) {
-        sb.append("*Previous Balance:* +₹${String.format(Locale.ENGLISH, "%.2f", invoice.previousBalancePaise / 100.0)}\n")
+        sb.append(String.format(Locale.ENGLISH, "%-26s +%12s\n", "Previous Balance", String.format(Locale.ENGLISH, "₹%.2f", invoice.previousBalancePaise / 100.0)))
     }
-    sb.append("*Total Amount:* *₹${String.format(Locale.ENGLISH, "%.2f", invoice.totalPaise / 100.0)}*\n")
-    sb.append("*Amount Paid:* ₹${String.format(Locale.ENGLISH, "%.2f", invoice.paidPaise / 100.0)}\n")
-    val due = (invoice.totalPaise - invoice.paidPaise).coerceAtLeast(0L)
-    if (due > 0 && invoice.status != "CANCELLED") {
-        sb.append("*Balance Due:* *₹${String.format(Locale.ENGLISH, "%.2f", due / 100.0)}* (PENDING)\n")
-    } else {
-        sb.append("*Status:* PAID ✅\n")
+    sb.append(divider).append("\n")
+    sb.append(String.format(Locale.ENGLISH, "%-26s %13s\n", "NET TOTAL", String.format(Locale.ENGLISH, "₹%.2f", invoice.totalPaise / 100.0)))
+    sb.append(String.format(Locale.ENGLISH, "%-26s %13s\n", "Amount Paid", String.format(Locale.ENGLISH, "₹%.2f", invoice.paidPaise / 100.0)))
+    val balanceDue = (invoice.totalPaise - invoice.paidPaise).coerceAtLeast(0L)
+    if (balanceDue > 0 && invoice.status != "CANCELLED") {
+        sb.append(String.format(Locale.ENGLISH, "%-26s %13s\n", "Balance Due", String.format(Locale.ENGLISH, "₹%.2f", balanceDue / 100.0)))
     }
-    sb.append("─────────────────────\n")
-
+    sb.append(divider).append("\n")
     if (store.termsAndConditions.isNotBlank()) {
-        sb.append("\n_${store.termsAndConditions}_\n")
+        sb.append(store.termsAndConditions.trim()).append("\n")
     }
-    sb.append("🙏 _Thank you for your business!_")
+    sb.append("Thank you for your business!\n")
     return sb.toString()
 }
 
@@ -2078,5 +2082,5 @@ private fun copyBillToClipboard(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val clip = ClipData.newPlainText("Invoice ${invoice.invoiceNumber}", text)
     clipboard.setPrimaryClip(clip)
-    Toast.makeText(context, "Bill copied! Ready to paste into WhatsApp 📋", Toast.LENGTH_SHORT).show()
+    Toast.makeText(context, "Bill copied to clipboard", Toast.LENGTH_SHORT).show()
 }
