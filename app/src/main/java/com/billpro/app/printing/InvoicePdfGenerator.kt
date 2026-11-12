@@ -183,9 +183,10 @@ object InvoicePdfGenerator {
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         canvas.drawText("#", 50f, tableTopY + 17f, paint)
         canvas.drawText("ITEM DESCRIPTION", 80f, tableTopY + 17f, paint)
-        canvas.drawText("QTY", 330f, tableTopY + 17f, paint)
-        canvas.drawText("RATE", 410f, tableTopY + 17f, paint)
-        canvas.drawText("AMOUNT", 490f, tableTopY + 17f, paint)
+        canvas.drawText("QTY", 320f, tableTopY + 17f, paint)
+        canvas.drawText("UNIT", 370f, tableTopY + 17f, paint)
+        canvas.drawText("RATE", 425f, tableTopY + 17f, paint)
+        canvas.drawText("AMOUNT", 495f, tableTopY + 17f, paint)
 
         // Table Rows
         var currentY = tableTopY + 44f
@@ -195,12 +196,13 @@ object InvoicePdfGenerator {
             paint.color = Color.rgb(30, 30, 30)
             paint.textSize = 10f
             canvas.drawText("${index + 1}", 50f, currentY, paint)
-            canvas.drawText(line.description.take(40), 80f, currentY, paint)
+            canvas.drawText(line.description.take(35), 80f, currentY, paint)
 
-            val qtyFormatted = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
-            canvas.drawText(qtyFormatted, 330f, currentY, paint)
-            canvas.drawText(formatPaise(line.unitPricePaise), 410f, currentY, paint)
-            canvas.drawText(formatPaise(line.lineTotalPaise), 490f, currentY, paint)
+            val qtyFormatted = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, line.quantity)
+            canvas.drawText(qtyFormatted, 320f, currentY, paint)
+            canvas.drawText(line.unit, 370f, currentY, paint)
+            canvas.drawText(formatPaise(line.unitPricePaise), 425f, currentY, paint)
+            canvas.drawText(formatPaise(line.lineTotalPaise), 495f, currentY, paint)
 
             currentY += 20f
         }
@@ -349,7 +351,13 @@ object InvoicePdfGenerator {
         canvas.drawText("CUST: $custName", 8f, y, paint)
         paint.textAlign = Paint.Align.RIGHT
         canvas.drawText(invoice.status, width - 8f, y, paint)
-        y += 12f
+        y += 11f
+
+        if (customer != null && customer.phone.isNotBlank()) {
+            paint.textAlign = Paint.Align.LEFT
+            canvas.drawText("TEL:  ${customer.phone}", 8f, y, paint)
+            y += 11f
+        }
 
         // Dashed Divider
         paint.textAlign = Paint.Align.LEFT
@@ -360,12 +368,15 @@ object InvoicePdfGenerator {
         // 3. Table Header
         paint.color = Color.BLACK
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        paint.textSize = 8f
-        canvas.drawText("ITEM", 8f, y, paint)
+        paint.textSize = 7.5f
+        paint.textAlign = Paint.Align.LEFT
+        canvas.drawText("#", 8f, y, paint)
+        canvas.drawText("ITEM", 20f, y, paint)
         paint.textAlign = Paint.Align.CENTER
-        canvas.drawText("QTY", 120f, y, paint)
+        canvas.drawText("QTY", 112f, y, paint)
+        canvas.drawText("UNIT", 142f, y, paint)
         paint.textAlign = Paint.Align.RIGHT
-        canvas.drawText("RATE", 168f, y, paint)
+        canvas.drawText("RATE", 182f, y, paint)
         canvas.drawText("TOTAL", width - 8f, y, paint)
         y += 11f
 
@@ -376,20 +387,22 @@ object InvoicePdfGenerator {
 
         // 4. Line Items
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        paint.textSize = 8f
+        paint.textSize = 7.5f
 
-        for (line in lines) {
+        lines.forEachIndexed { index, line ->
             paint.color = Color.BLACK
             paint.textAlign = Paint.Align.LEFT
-            val desc = line.description.take(18)
-            canvas.drawText(desc, 8f, y, paint)
+            canvas.drawText("${index + 1}", 8f, y, paint)
+            val desc = line.description.take(15)
+            canvas.drawText(desc, 20f, y, paint)
 
             paint.textAlign = Paint.Align.CENTER
-            val qtyStr = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
-            canvas.drawText(qtyStr, 120f, y, paint)
+            val qtyStr = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, line.quantity)
+            canvas.drawText(qtyStr, 112f, y, paint)
+            canvas.drawText(line.unit, 142f, y, paint)
 
             paint.textAlign = Paint.Align.RIGHT
-            canvas.drawText("%.2f".format(line.unitPricePaise / 100.0), 168f, y, paint)
+            canvas.drawText("%.2f".format(line.unitPricePaise / 100.0), 182f, y, paint)
             canvas.drawText("%.2f".format(line.lineTotalPaise / 100.0), width - 8f, y, paint)
 
             y += 13f

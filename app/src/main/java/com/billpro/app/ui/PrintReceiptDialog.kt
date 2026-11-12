@@ -38,6 +38,7 @@ import com.billpro.app.data.StoreProfile
 import com.billpro.app.printing.BluetoothPrinterDevice
 import com.billpro.app.printing.BluetoothThermalPrinter
 import com.billpro.app.printing.EscPosFormatter
+import com.billpro.app.printing.EscPosLineItem
 import com.billpro.app.printing.InvoicePdfGenerator
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -249,6 +250,13 @@ fun PrintReceiptDialog(
                                 fontSize = 11.sp,
                                 color = Color(0xFF191919)
                             )
+                            if (customer != null && customer.phone.isNotBlank()) {
+                                Text(
+                                    text = "Phone: ${customer.phone}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF555555)
+                                )
+                            }
 
                             ReceiptDashedDivider()
 
@@ -257,51 +265,66 @@ fun PrintReceiptDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("ITEM", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), modifier = Modifier.weight(2f))
-                                Text("QTY", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.Center, modifier = Modifier.weight(0.8f))
-                                Text("RATE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
-                                Text("AMOUNT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.End, modifier = Modifier.weight(1.3f))
+                                Text("SN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), modifier = Modifier.weight(0.4f))
+                                Text("ITEM", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), modifier = Modifier.weight(1.8f))
+                                Text("QTY", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.Center, modifier = Modifier.weight(0.7f))
+                                Text("UNIT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.Center, modifier = Modifier.weight(0.6f))
+                                Text("RATE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.End, modifier = Modifier.weight(1.1f))
+                                Text("AMOUNT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF191919), textAlign = TextAlign.End, modifier = Modifier.weight(1.2f))
                             }
 
                             ReceiptDashedDivider()
 
                             // Line Items
-                            lines.forEach { line ->
+                            lines.forEachIndexed { index, line ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
+                                        text = "${index + 1}",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF666666),
+                                        modifier = Modifier.weight(0.4f)
+                                    )
+                                    Text(
                                         text = line.description,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         color = Color(0xFF191919),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(2f)
+                                        modifier = Modifier.weight(1.8f)
                                     )
-                                    val qtyStr = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
+                                    val qtyStr = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, line.quantity)
                                     Text(
                                         text = qtyStr,
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         color = Color(0xFF555555),
                                         textAlign = TextAlign.Center,
-                                        modifier = Modifier.weight(0.8f)
+                                        modifier = Modifier.weight(0.7f)
+                                    )
+                                    Text(
+                                        text = line.unit,
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF555555),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.weight(0.6f)
                                     )
                                     val ratePaise = if (line.quantity > 0) (line.lineTotalPaise / line.quantity).toLong() else line.lineTotalPaise
                                     Text(
                                         text = "₹${formatRupees(ratePaise)}",
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         color = Color(0xFF555555),
                                         textAlign = TextAlign.End,
                                         modifier = Modifier.weight(1.1f)
                                     )
                                     Text(
                                         text = "₹${formatRupees(line.lineTotalPaise)}",
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = Color(0xFF191919),
                                         textAlign = TextAlign.End,
-                                        modifier = Modifier.weight(1.3f)
+                                        modifier = Modifier.weight(1.2f)
                                     )
                                 }
                             }
@@ -595,7 +618,12 @@ fun PrintReceiptDialog(
                                 isPrinting = true
                                 coroutineScope.launch {
                                     val formattedLines = lines.map {
-                                        Triple(it.description, it.quantity, it.lineTotalPaise)
+                                        EscPosLineItem(
+                                            description = it.description,
+                                            quantity = it.quantity,
+                                            unit = it.unit,
+                                            lineTotalPaise = it.lineTotalPaise
+                                        )
                                     }
                                     val escBytes = EscPosFormatter.receipt80mm(
                                         storeName = store.storeName.ifBlank { "BillPro Store" },
@@ -604,6 +632,7 @@ fun PrintReceiptDialog(
                                         invoiceNo = invoice.invoiceNumber,
                                         dateStr = dateFormatted,
                                         customerName = customerNameDisplay,
+                                        customerPhone = customer?.phone ?: "",
                                         lines = formattedLines,
                                         subtotalPaise = invoice.subtotalPaise,
                                         discountPaise = invoice.discountPaise,

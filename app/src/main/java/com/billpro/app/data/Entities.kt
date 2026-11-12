@@ -89,6 +89,7 @@ data class InvoiceLineEntity(
     val description: String,
     val quantity: Double,
     val unitPricePaise: Long,
+    val unit: String = "pcs",
     val gstRatePercent: Double,
     val taxableValuePaise: Long,
     val taxPaise: Long,

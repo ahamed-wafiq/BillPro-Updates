@@ -835,17 +835,44 @@ private fun ProductFormDialog(
                         value = stockQuantityText,
                         onValueChange = { stockQuantityText = it },
                         label = { Text("Stock Qty") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     )
                     OutlinedTextField(
                         value = unit,
                         onValueChange = { unit = it },
-                        label = { Text("Unit (pcs/kg/box)") },
+                        label = { Text("Unit (e.g. kg/ltr/pcs)") },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     )
+                }
+
+                // Quick Unit Selector Options (kg, ltr, pcs, etc.)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Popular Units (tap to select):",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = BillProTheme.colors.secondaryText
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("pcs", "kg", "ltr", "gm", "ml", "box", "pack", "mtr", "dozen", "bag").forEach { u ->
+                            item {
+                                FilterChip(
+                                    selected = unit.equals(u, ignoreCase = true),
+                                    onClick = { unit = u },
+                                    label = { Text(u, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BillProTheme.colors.primaryYellow,
+                                        selectedLabelColor = Color(0xFF191919),
+                                        containerColor = Color(0xFFF7F6F2),
+                                        labelColor = Color(0xFF555555)
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -995,7 +1022,7 @@ private fun AddStockMovementDialog(
                     value = quantityText,
                     onValueChange = { quantityText = it },
                     label = { Text("Quantity (${selectedProduct?.unit ?: "units"})") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -1004,7 +1031,7 @@ private fun AddStockMovementDialog(
                     value = unitCostText,
                     onValueChange = { unitCostText = it },
                     label = { Text("Unit Cost (₹) (Optional)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )

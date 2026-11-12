@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -593,7 +594,8 @@ private data class DraftLineItem(
     val description: String,
     val quantity: Double,
     val unitPricePaise: Long,
-    val quantityText: String = if (quantity % 1.0 == 0.0) quantity.toInt().toString() else "%.1f".format(quantity),
+    val unit: String = product?.unit?.ifBlank { "pcs" } ?: "pcs",
+    val quantityText: String = if (quantity % 1.0 == 0.0) quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, quantity),
     val rateText: String = String.format(Locale.ENGLISH, "%.2f", unitPricePaise / 100.0)
 ) {
     val lineTotalPaise: Long
@@ -863,6 +865,7 @@ private fun CreateInvoiceView(
                                             description = item.description,
                                             quantity = item.quantity,
                                             unitPricePaise = item.unitPricePaise,
+                                            unit = item.unit.ifBlank { "pcs" },
                                             gstRatePercent = 0.0,
                                             taxableValuePaise = item.lineTotalPaise,
                                             taxPaise = 0L,
@@ -1217,7 +1220,7 @@ private fun CreateInvoiceView(
                                                                 val newQ = existing.quantity + 1.0
                                                                 lineItems[existingIndex] = existing.copy(
                                                                     quantity = newQ,
-                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.2f".format(Locale.ENGLISH, newQ)
                                                                 )
                                                             } else {
                                                                 lineItems.add(
@@ -1226,6 +1229,7 @@ private fun CreateInvoiceView(
                                                                         description = prod.name,
                                                                         quantity = 1.0,
                                                                         unitPricePaise = prod.salePricePaise,
+                                                                        unit = prod.unit.ifBlank { "pcs" },
                                                                         quantityText = "1"
                                                                     )
                                                                 )
@@ -1252,7 +1256,7 @@ private fun CreateInvoiceView(
                                                                 val newQ = existing.quantity + 1.0
                                                                 lineItems[existingIndex] = existing.copy(
                                                                     quantity = newQ,
-                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.1f".format(newQ)
+                                                                    quantityText = if (newQ % 1.0 == 0.0) newQ.toInt().toString() else "%.2f".format(Locale.ENGLISH, newQ)
                                                                 )
                                                             } else {
                                                                 lineItems.add(
@@ -1261,6 +1265,7 @@ private fun CreateInvoiceView(
                                                                         description = prod.name,
                                                                         quantity = 1.0,
                                                                         unitPricePaise = prod.salePricePaise,
+                                                                        unit = prod.unit.ifBlank { "pcs" },
                                                                         quantityText = "1"
                                                                     )
                                                                 )
@@ -1330,19 +1335,39 @@ private fun CreateInvoiceView(
                                         .padding(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    // Header: Item Description & Delete Button
+                                    // Header: Serial Number (#), Item Description & Delete Button
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = item.description,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF191919),
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Surface(
+                                                color = Color(0xFFFFF9E6),
+                                                shape = RoundedCornerShape(6.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFC928))
+                                            ) {
+                                                Text(
+                                                    text = "#${index + 1}",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color(0xFF191919),
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Text(
+                                                text = item.description,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF191919),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
 
                                         IconButton(
                                             onClick = { lineItems.removeAt(index) },
@@ -1360,7 +1385,7 @@ private fun CreateInvoiceView(
                                     // Editable Inputs: Rate (₹) & Units (Qty) side-by-side, plus line total
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         // Editable Rate (₹)
@@ -1397,10 +1422,10 @@ private fun CreateInvoiceView(
                                                     quantityText = filtered
                                                 )
                                             },
-                                            label = { Text("Units", fontSize = 11.sp) },
+                                            label = { Text("Qty (${item.unit})", fontSize = 11.sp) },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                             singleLine = true,
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier.weight(1.1f),
                                             textStyle = LocalTextStyle.current.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 13.sp
@@ -1413,7 +1438,7 @@ private fun CreateInvoiceView(
                                             horizontalAlignment = Alignment.End,
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .padding(start = 4.dp)
+                                                .padding(start = 2.dp)
                                         ) {
                                             Text(
                                                 text = "Total",
@@ -1429,6 +1454,36 @@ private fun CreateInvoiceView(
                                                 maxLines = 1,
                                                 softWrap = false
                                             )
+                                        }
+                                    }
+
+                                    // Quick Unit Selector Chips for this line item (kg, ltr, pcs, etc.)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Unit:", fontSize = 10.sp, color = Color(0xFF888888), fontWeight = FontWeight.Bold)
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            listOf("pcs", "kg", "ltr", "gm", "ml", "box", "pack", "mtr").forEach { u ->
+                                                item {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = if (item.unit.equals(u, ignoreCase = true)) Color(0xFFFFC928) else Color(0xFFF2F0E8),
+                                                        modifier = Modifier.clickable {
+                                                            lineItems[index] = item.copy(unit = u)
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = u,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (item.unit.equals(u, ignoreCase = true)) Color(0xFF191919) else Color(0xFF666666),
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1753,16 +1808,16 @@ private fun InvoiceDetailDialog(
                     Text("ITEMS BREAKDOWN", color = BillProTheme.colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                 }
 
-                items(lines) { line ->
+                itemsIndexed(lines) { index, line ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(line.description, color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
-                            Text("$qtyText x ₹" + String.format(Locale.ENGLISH, "%.2f", line.unitPricePaise / 100.0), color = BillProTheme.colors.muted, fontSize = 11.sp)
+                            Text("${index + 1}. ${line.description}", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, line.quantity)
+                            Text("$qtyText ${line.unit} × ₹" + String.format(Locale.ENGLISH, "%.2f", line.unitPricePaise / 100.0), color = BillProTheme.colors.muted, fontSize = 11.sp)
                         }
                         Text(
                             "₹ " + String.format(Locale.ENGLISH, "%,.2f", line.lineTotalPaise / 100.0),
@@ -2044,26 +2099,27 @@ private fun formatInvoiceAsText(
         sb.append("GSTIN: ").append(store.gstin.trim()).append("\n")
     }
 
-    val divider = "----------------------------------------"
+    val divider = "--------------------------------------------"
     sb.append(divider).append("\n")
     sb.append("Inv: ").append(invoice.invoiceNumber).append("   ").append(dateStr).append("\n")
     val custName = customer?.name?.trim() ?: if (invoice.customerId == null) "Walk-in Customer" else "Customer"
     val custPhone = customer?.phone?.trim()?.takeIf { it.isNotBlank() }
-    sb.append("Customer: ").append(custName)
+    sb.append("Customer: ").append(custName).append("\n")
     if (custPhone != null) {
-        sb.append(" (").append(custPhone).append(")")
+        sb.append("Phone:    ").append(custPhone).append("\n")
     }
-    sb.append("\n")
     sb.append(divider).append("\n")
-    sb.append(String.format(Locale.ENGLISH, "%-15s %5s %9s %8s\n", "ITEM", "QTY", "RATE", "AMOUNT"))
+    sb.append(String.format(Locale.ENGLISH, "%-3s %-15s %5s %-4s %7s %8s\n", "SN", "ITEM", "QTY", "UNIT", "RATE", "AMOUNT"))
     sb.append(divider).append("\n")
 
-    for (line in lines) {
+    lines.forEachIndexed { index, line ->
+        val sn = "${index + 1}"
         val desc = if (line.description.length > 15) line.description.take(14) + "…" else line.description
-        val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.1f".format(line.quantity)
+        val qtyText = if (line.quantity % 1.0 == 0.0) line.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, line.quantity)
+        val unitText = line.unit.take(4)
         val rateText = String.format(Locale.ENGLISH, "₹%.2f", line.unitPricePaise / 100.0)
         val totalText = String.format(Locale.ENGLISH, "₹%.2f", line.lineTotalPaise / 100.0)
-        sb.append(String.format(Locale.ENGLISH, "%-15s %5s %9s %8s\n", desc, qtyText, rateText, totalText))
+        sb.append(String.format(Locale.ENGLISH, "%-3s %-15s %5s %-4s %7s %8s\n", sn, desc, qtyText, unitText, rateText, totalText))
     }
 
     sb.append(divider).append("\n")

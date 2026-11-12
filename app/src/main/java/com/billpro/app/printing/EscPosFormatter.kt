@@ -4,6 +4,13 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.Charset
 import java.util.Locale
 
+data class EscPosLineItem(
+    val description: String,
+    val quantity: Double,
+    val unit: String = "pcs",
+    val lineTotalPaise: Long
+)
+
 /**
  * ESC/POS Formatter for Thermal Printers (Standard 58mm and 80mm).
  * 80mm printers have 48 character line width.
@@ -38,7 +45,8 @@ object EscPosFormatter {
         invoiceNo: String,
         dateStr: String,
         customerName: String,
-        lines: List<Triple<String, Double, Long>>, // description, quantity, lineTotalPaise
+        customerPhone: String = "",
+        lines: List<EscPosLineItem>,
         subtotalPaise: Long,
         discountPaise: Long = 0L,
         previousBalancePaise: Long = 0L,
@@ -69,16 +77,21 @@ object EscPosFormatter {
         if (customerName.isNotBlank()) {
             out.write("Customer: $customerName\n".toByteArray(charset))
         }
+        if (customerPhone.isNotBlank()) {
+            out.write("Phone:    $customerPhone\n".toByteArray(charset))
+        }
         out.write("------------------------------------------------\n".toByteArray(charset))
-        out.write(String.format(Locale.ENGLISH, "%-22s %5s %8s %10s\n", "ITEM", "QTY", "RATE", "AMOUNT").toByteArray(charset))
+        out.write(String.format(Locale.ENGLISH, "%-3s %-16s %5s %-4s %7s %8s\n", "SN", "ITEM", "QTY", "UNIT", "RATE", "AMOUNT").toByteArray(charset))
         out.write("------------------------------------------------\n".toByteArray(charset))
 
-        for (item in lines) {
-            val name = item.first.take(22)
-            val qty = if (item.second % 1.0 == 0.0) item.second.toInt().toString() else "%.1f".format(item.second)
-            val total = "%.2f".format(item.third / 100.0)
-            val rate = if (item.second > 0) "%.2f".format((item.third / item.second) / 100.0) else total
-            out.write(String.format(Locale.ENGLISH, "%-22s %5s %8s %10s\n", name, qty, rate, total).toByteArray(charset))
+        lines.forEachIndexed { index, item ->
+            val sn = "${index + 1}"
+            val name = item.description.take(16)
+            val qty = if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else "%.2f".format(Locale.ENGLISH, item.quantity)
+            val unit = item.unit.take(4)
+            val total = "%.2f".format(item.lineTotalPaise / 100.0)
+            val rate = if (item.quantity > 0) "%.2f".format((item.lineTotalPaise / item.quantity) / 100.0) else total
+            out.write(String.format(Locale.ENGLISH, "%-3s %-16s %5s %-4s %7s %8s\n", sn, name, qty, unit, rate, total).toByteArray(charset))
         }
 
         out.write("------------------------------------------------\n".toByteArray(charset))

@@ -114,6 +114,7 @@ class BusinessSyncManager(
                         "description" to l.description,
                         "quantity" to l.quantity,
                         "unitPricePaise" to l.unitPricePaise,
+                        "unit" to l.unit,
                         "gstRatePercent" to l.gstRatePercent,
                         "taxableValuePaise" to l.taxableValuePaise,
                         "taxPaise" to l.taxPaise,
@@ -318,6 +319,7 @@ class BusinessSyncManager(
                         val desc = (m["description"] as? String) ?: "Item"
                         val qty = (m["quantity"] as? Number)?.toDouble() ?: 1.0
                         val unitPrice = (m["unitPricePaise"] as? Number)?.toLong() ?: 0L
+                        val unit = (m["unit"] as? String)?.ifBlank { "pcs" } ?: "pcs"
                         val gst = (m["gstRatePercent"] as? Number)?.toDouble() ?: 0.0
                         val taxable = (m["taxableValuePaise"] as? Number)?.toLong() ?: (qty * unitPrice).toLong()
                         val tax = (m["taxPaise"] as? Number)?.toLong() ?: 0L
@@ -330,6 +332,7 @@ class BusinessSyncManager(
                             description = desc,
                             quantity = qty,
                             unitPricePaise = unitPrice,
+                            unit = unit,
                             gstRatePercent = gst,
                             taxableValuePaise = taxable,
                             taxPaise = tax,
