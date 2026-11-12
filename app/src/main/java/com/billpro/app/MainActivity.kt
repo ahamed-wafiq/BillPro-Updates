@@ -114,6 +114,7 @@ private fun BillProApp(
 
     var selected by remember { mutableStateOf(Tab.Home) }
     var shouldOpenCreateBillDirectly by remember { mutableStateOf(false) }
+    var isCreatingBill by remember { mutableStateOf(false) }
     var shouldOpenAddProductDirectly by remember { mutableStateOf(false) }
     var shouldOpenAddCustomerDirectly by remember { mutableStateOf(false) }
     var isStoreProfileOpen by remember { mutableStateOf(false) }
@@ -127,6 +128,8 @@ private fun BillProApp(
         Tab.More, Tab.Ledger, Tab.Reports, Tab.Invoices -> 3
     }
 
+    val showBottomNav = !isCreatingBill && !isStoreProfileOpen
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -136,22 +139,28 @@ private fun BillProApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 76.dp) // Leave clearance for floating bottom bar
+                .then(if (showBottomNav) Modifier.padding(bottom = 76.dp) else Modifier)
         ) {
             when (selected) {
                 Tab.Home -> Dashboard(
                     dao = dao,
                     session = session,
-                    onNavigate = { tab -> selected = tab },
+                    onNavigate = { tab ->
+                        isCreatingBill = false
+                        selected = tab
+                    },
                     onQuickCreateBill = {
                         shouldOpenCreateBillDirectly = true
+                        isCreatingBill = true
                         selected = Tab.Invoices
                     },
                     onQuickAddProduct = {
+                        isCreatingBill = false
                         shouldOpenAddProductDirectly = true
                         selected = Tab.Inventory
                     },
                     onQuickAddCustomer = {
+                        isCreatingBill = false
                         shouldOpenAddCustomerDirectly = true
                         selected = Tab.Ledger
                     },
@@ -170,7 +179,11 @@ private fun BillProApp(
                     dao = dao,
                     businessId = session.businessId,
                     initialOpenCreate = shouldOpenCreateBillDirectly,
-                    onBackClick = { selected = Tab.Home },
+                    onCreatingBillChange = { isCreatingBill = it },
+                    onBackClick = {
+                        isCreatingBill = false
+                        selected = Tab.Home
+                    },
                     onStoreProfileClick = { isStoreProfileOpen = true }
                 ).also {
                     shouldOpenCreateBillDirectly = false
@@ -199,7 +212,10 @@ private fun BillProApp(
                 )
                 Tab.More -> MoreMenuScreen(
                     session = session,
-                    onNavigate = { tab -> selected = tab },
+                    onNavigate = { tab ->
+                        isCreatingBill = false
+                        selected = tab
+                    },
                     onOpenStoreProfile = { isStoreProfileOpen = true },
                     onLogout = onLogout
                 )
@@ -207,23 +223,27 @@ private fun BillProApp(
         }
 
         // Floating Bottom Navigation (Reference Image Style)
-        FloatingBottomNavigation(
-            selectedTab = bottomNavIndex,
-            onTabSelected = { index ->
-                selected = when (index) {
-                    0 -> Tab.Home
-                    1 -> Tab.Inventory
-                    2 -> Tab.Cashbook
-                    else -> Tab.More
-                }
-            },
-            onCentralActionClick = {
-                // Central yellow elevated flash button opens Invoices & Billing list
-                shouldOpenCreateBillDirectly = false
-                selected = Tab.Invoices
-            },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+        if (showBottomNav) {
+            FloatingBottomNavigation(
+                selectedTab = bottomNavIndex,
+                onTabSelected = { index ->
+                    isCreatingBill = false
+                    selected = when (index) {
+                        0 -> Tab.Home
+                        1 -> Tab.Inventory
+                        2 -> Tab.Cashbook
+                        else -> Tab.More
+                    }
+                },
+                onCentralActionClick = {
+                    // Central yellow elevated flash button opens Invoices & Billing list
+                    isCreatingBill = false
+                    shouldOpenCreateBillDirectly = false
+                    selected = Tab.Invoices
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
 
         // Store Settings & Updates Dialog
         if (isStoreProfileOpen) {

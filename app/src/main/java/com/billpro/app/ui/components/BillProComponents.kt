@@ -622,6 +622,7 @@ fun FloatingBottomNavigation(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 16.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
@@ -632,6 +633,7 @@ fun FloatingBottomNavigation(
             shadowElevation = 10.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFEFECE5)),
             modifier = Modifier
+                .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .height(68.dp)
         ) {

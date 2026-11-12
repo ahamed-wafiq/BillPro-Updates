@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +47,7 @@ fun InvoicesScreen(
     dao: BillProDao,
     businessId: String = "default_biz",
     initialOpenCreate: Boolean = false,
+    onCreatingBillChange: (Boolean) -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     onStoreProfileClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -62,6 +64,9 @@ fun InvoicesScreen(
         if (initialOpenCreate) {
             isCreateDialogOpen = true
         }
+    }
+    LaunchedEffect(isCreateDialogOpen) {
+        onCreatingBillChange(isCreateDialogOpen)
     }
     var selectedInvoiceForDetail by remember { mutableStateOf<InvoiceEntity?>(null) }
     var invoiceToCancel by remember { mutableStateOf<InvoiceEntity?>(null) }
@@ -83,28 +88,45 @@ fun InvoicesScreen(
     val customers by dao.observeCustomers(businessId).collectAsState(initial = emptyList())
     val customerMap = remember(customers) { customers.associateBy { it.id } }
 
-    Scaffold(
-        modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = BillProTheme.colors.secondaryBackground
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(BillProTheme.colors.secondaryBackground)
-        ) {
-            BillProTopBar(
-                title = "Invoices & Billing",
-                onBackClick = onBackClick,
-                onStoreProfileClick = onStoreProfileClick
-            )
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+    if (isCreateDialogOpen) {
+        BackHandler { isCreateDialogOpen = false }
+        CreateInvoiceView(
+            dao = dao,
+            businessId = businessId,
+            customers = customers,
+            onDismiss = { isCreateDialogOpen = false },
+            onInvoiceCreated = { invoiceId ->
+                isCreateDialogOpen = false
+                coroutineScope.launch {
+                    val created = dao.getInvoiceById(invoiceId, businessId)
+                    selectedInvoiceForDetail = created
+                    snackbarHostState.showSnackbar("Invoice generated successfully")
+                }
+            }
+        )
+    } else {
+        Scaffold(
+            modifier = modifier,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = BillProTheme.colors.secondaryBackground
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(BillProTheme.colors.secondaryBackground)
             ) {
+                BillProTopBar(
+                    title = "Invoices & Billing",
+                    onBackClick = onBackClick,
+                    onStoreProfileClick = onStoreProfileClick
+                )
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
                 // Header with Search and New Bill Action
                 item {
                     Row(
@@ -260,24 +282,7 @@ fun InvoicesScreen(
         }
     }
 }
-
-    // Create New Invoice Wizard / Dialog
-    if (isCreateDialogOpen) {
-        CreateInvoiceDialog(
-            dao = dao,
-            businessId = businessId,
-            customers = customers,
-            onDismiss = { isCreateDialogOpen = false },
-            onInvoiceCreated = { invoiceId ->
-                isCreateDialogOpen = false
-                coroutineScope.launch {
-                    val created = dao.getInvoiceById(invoiceId, businessId)
-                    selectedInvoiceForDetail = created
-                    snackbarHostState.showSnackbar("Invoice generated successfully")
-                }
-            }
-        )
-    }
+}
 
     // Invoice Detail Dialog
     if (selectedInvoiceForDetail != null) {
@@ -597,7 +602,7 @@ private data class DraftLineItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CreateInvoiceDialog(
+private fun CreateInvoiceView(
     dao: BillProDao,
     businessId: String = "default_biz",
     customers: List<CustomerEntity>,
@@ -705,29 +710,28 @@ private fun CreateInvoiceDialog(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true
-        )
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = BillProTheme.colors.secondaryBackground
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = BillProTheme.colors.secondaryBackground
-        ) {
-            Scaffold(
-                topBar = {
-                    Surface(
-                        color = Color.White,
-                        shadowElevation = 3.dp,
-                        modifier = Modifier.fillMaxWidth()
+        Scaffold(
+            topBar = {
+                Surface(
+                    color = Color.White,
+                    shadowElevation = 3.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                .widthIn(max = 760.dp)
+                                .align(Alignment.Center),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -768,18 +772,25 @@ private fun CreateInvoiceDialog(
                             }
                         }
                     }
-                },
-                bottomBar = {
-                    Surface(
-                        color = Color.White,
-                        shadowElevation = 8.dp,
-                        modifier = Modifier.fillMaxWidth()
+                }
+            },
+            bottomBar = {
+                Surface(
+                    color = Color.White,
+                    shadowElevation = 10.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .navigationBarsPadding()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .widthIn(max = 760.dp)
+                                .align(Alignment.Center),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -885,11 +896,18 @@ private fun CreateInvoiceDialog(
                         }
                     }
                 }
-            ) { innerPadding ->
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter
+            ) {
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
+                        .fillMaxWidth()
+                        .widthIn(max = 760.dp)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
