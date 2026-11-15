@@ -141,7 +141,15 @@ interface BillProDao {
     @Query("SELECT * FROM invoices WHERE customerId = :customerId AND businessId = :businessId ORDER BY createdAtEpochMs DESC")
     fun observeCustomerInvoices(customerId: Long, businessId: String): Flow<List<InvoiceEntity>>
 
-    @Query("SELECT COALESCE(SUM(totalPaise - paidPaise), 0) FROM invoices WHERE customerId = :customerId AND businessId = :businessId AND status != 'CANCELLED'")
+    @Query("""
+        SELECT MAX(0, COALESCE(
+            SUM(CASE WHEN totalPaise > previousBalancePaise THEN totalPaise - previousBalancePaise ELSE 0 END) 
+            - SUM(paidPaise), 
+            0
+        )) 
+        FROM invoices 
+        WHERE customerId = :customerId AND businessId = :businessId AND status != 'CANCELLED'
+    """)
     suspend fun getCustomerUnpaidInvoiceBalance(customerId: Long, businessId: String): Long
 
     // ----------------------------------------------------
@@ -222,13 +230,21 @@ interface BillProDao {
     // ----------------------------------------------------
     // AGGREGATIONS & REPORTS (ISOLATED BY BUSINESS)
     // ----------------------------------------------------
-    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    @Query("SELECT COALESCE(SUM(CASE WHEN totalPaise > previousBalancePaise THEN totalPaise - previousBalancePaise ELSE 0 END), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
     fun observeInvoiceTotalForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
 
     @Query("SELECT COUNT(*) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
     fun observeInvoiceCountForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Int>
 
-    @Query("SELECT COALESCE(SUM(totalPaise - paidPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND totalPaise > paidPaise AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
+    @Query("""
+        SELECT MAX(0, COALESCE(
+            SUM(CASE WHEN totalPaise > previousBalancePaise THEN totalPaise - previousBalancePaise ELSE 0 END) 
+            - SUM(paidPaise), 
+            0
+        )) 
+        FROM invoices 
+        WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs
+    """)
     fun observePendingPaymentsForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
 
     @Query("SELECT COALESCE(SUM(amountPaise), 0) FROM cashbook_entries WHERE businessId = :businessId AND direction = 'IN' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
@@ -249,13 +265,21 @@ interface BillProDao {
     @Query("SELECT COALESCE(SUM(subtotalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND createdAtEpochMs >= :startMs AND createdAtEpochMs < :endMs")
     fun observeTaxableValueForPeriod(businessId: String, startMs: Long, endMs: Long): Flow<Long>
 
-    @Query("SELECT COALESCE(SUM(totalPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED'")
+    @Query("SELECT COALESCE(SUM(CASE WHEN totalPaise > previousBalancePaise THEN totalPaise - previousBalancePaise ELSE 0 END), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED'")
     fun observeTotalSales(businessId: String): Flow<Long>
 
     @Query("SELECT COUNT(*) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED'")
     fun observeTotalInvoicesCount(businessId: String): Flow<Int>
 
-    @Query("SELECT COALESCE(SUM(totalPaise - paidPaise), 0) FROM invoices WHERE businessId = :businessId AND status != 'CANCELLED' AND totalPaise > paidPaise")
+    @Query("""
+        SELECT MAX(0, COALESCE(
+            SUM(CASE WHEN totalPaise > previousBalancePaise THEN totalPaise - previousBalancePaise ELSE 0 END) 
+            - SUM(paidPaise), 
+            0
+        )) 
+        FROM invoices 
+        WHERE businessId = :businessId AND status != 'CANCELLED'
+    """)
     fun observePendingPayments(businessId: String): Flow<Long>
 
     @Query("SELECT * FROM invoices WHERE businessId = :businessId ORDER BY createdAtEpochMs DESC LIMIT :limit")

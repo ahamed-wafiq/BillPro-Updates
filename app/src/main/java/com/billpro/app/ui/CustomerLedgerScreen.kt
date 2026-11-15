@@ -503,9 +503,14 @@ private fun CustomerHistoryDialog(
     onDismiss: () -> Unit
 ) {
     val invoices by dao.observeCustomerInvoices(customer.id, businessId).collectAsState(initial = emptyList())
-    val totalBilled = invoices.sumOf { it.totalPaise }
-    val totalPaid = invoices.sumOf { it.paidPaise }
-    val totalDue = (totalBilled - totalPaid).coerceAtLeast(0)
+    val activeInvoices = remember(invoices) { invoices.filter { it.status != "CANCELLED" } }
+    val totalBilled = remember(activeInvoices) {
+        activeInvoices.sumOf { (it.totalPaise - it.previousBalancePaise).coerceAtLeast(0L) }
+    }
+    val totalPaid = remember(activeInvoices) { activeInvoices.sumOf { it.paidPaise } }
+    val totalDue = remember(customer.openingBalancePaise, totalBilled, totalPaid) {
+        (customer.openingBalancePaise + totalBilled - totalPaid).coerceAtLeast(0L)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,

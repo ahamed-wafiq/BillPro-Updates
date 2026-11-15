@@ -638,9 +638,11 @@ private fun CreateInvoiceView(
     var paymentMode by remember { mutableStateOf("Cash") }
     var notes by remember { mutableStateOf("") }
 
-    // Previous Balance states: fully automatic from customer account
+    // Previous Balance states: auto-calculated from customer account + manual user entry/override
     var includePreviousBalance by remember { mutableStateOf(false) }
     var customerPastBalancePaise by remember { mutableStateOf(0L) }
+    var manualPreviousBalanceText by remember { mutableStateOf("0") }
+    var isManualBalanceOverridden by remember { mutableStateOf(false) }
 
     val selectedCustomer = remember(selectedCustomerId, customers) {
         selectedCustomerId?.let { id -> customers.firstOrNull { it.id == id } }
@@ -655,9 +657,16 @@ private fun CreateInvoiceView(
             val pastDue = (opening + unpaid).coerceAtLeast(0L)
             customerPastBalancePaise = pastDue
             includePreviousBalance = pastDue > 0
+            manualPreviousBalanceText = if (pastDue > 0) {
+                if (pastDue % 100 == 0L) (pastDue / 100).toString()
+                else String.format(Locale.ENGLISH, "%.2f", pastDue / 100.0)
+            } else "0"
+            isManualBalanceOverridden = false
         } else {
             customerPastBalancePaise = 0L
             includePreviousBalance = false
+            manualPreviousBalanceText = "0"
+            isManualBalanceOverridden = false
         }
     }
 
@@ -697,8 +706,14 @@ private fun CreateInvoiceView(
         (discountRupees * 100).toLong().coerceAtLeast(0)
     }
 
-    val appliedPreviousBalancePaise = if (selectedCustomerId != null && includePreviousBalance) {
-        customerPastBalancePaise
+    val enteredPreviousBalancePaise = remember(manualPreviousBalanceText) {
+        val clean = manualPreviousBalanceText.trim().replace(",", "")
+        val rupees = clean.toDoubleOrNull() ?: 0.0
+        (rupees * 100).toLong().coerceAtLeast(0L)
+    }
+
+    val appliedPreviousBalancePaise = if (includePreviousBalance) {
+        enteredPreviousBalancePaise
     } else 0L
 
     val totalAmountPaise = remember(subtotalPaise, discountPaise, appliedPreviousBalancePaise) {
@@ -1491,95 +1506,136 @@ private fun CreateInvoiceView(
                         }
                     }
 
-                    // 4. Automatic Customer Previous Balance (Include / Exclude)
-                    if (selectedCustomerId != null) {
-                        item {
-                            Surface(
-                                color = BillProTheme.colors.cardBackground,
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    // 4. Customer Previous Balance (Auto-Calculated + Manual Entry/Override)
+                    item {
+                        Surface(
+                            color = BillProTheme.colors.cardBackground,
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.cardBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Icon(
+                                                Icons.Default.AccountBalanceWallet,
+                                                contentDescription = null,
+                                                tint = if (includePreviousBalance && appliedPreviousBalancePaise > 0) Color(0xFFE99A28) else BillProTheme.colors.textSecondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text("Previous Balance", color = BillProTheme.colors.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        if (selectedCustomer != null) {
                                             if (customerPastBalancePaise > 0) {
                                                 Text(
-                                                    "Past outstanding: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
-                                                    color = BillProTheme.colors.warning,
+                                                    "System Outstanding: ₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0),
+                                                    color = Color(0xFFE99A28),
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Medium
+                                                    fontWeight = FontWeight.SemiBold
                                                 )
                                             } else {
-                                                Text("No past outstanding balance (₹0.00)", color = BillProTheme.colors.muted, fontSize = 11.sp)
+                                                Text("Customer has no past dues (₹0.00)", color = BillProTheme.colors.muted, fontSize = 11.sp)
                                             }
-                                        }
-
-                                        if (customerPastBalancePaise > 0) {
-                                            Switch(
-                                                checked = includePreviousBalance,
-                                                onCheckedChange = { includePreviousBalance = it },
-                                                colors = SwitchDefaults.colors(
-                                                    checkedThumbColor = Color(0xFF191919),
-                                                    checkedTrackColor = BillProTheme.colors.accent
-                                                )
-                                            )
+                                        } else {
+                                            Text("Walk-in / Cash (Manual balance optional)", color = BillProTheme.colors.muted, fontSize = 11.sp)
                                         }
                                     }
 
-                                    if (customerPastBalancePaise > 0) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(Color(0xFFF1EFE9), RoundedCornerShape(8.dp))
-                                                .padding(3.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = if (includePreviousBalance) BillProTheme.colors.accent else Color.Transparent,
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clickable { includePreviousBalance = true }
-                                        ) {
-                                            Box(
-                                                modifier = Modifier.padding(vertical = 7.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "Include (+₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0) + ")",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = if (includePreviousBalance) FontWeight.Bold else FontWeight.Medium,
-                                                    color = Color(0xFF191919)
-                                                )
+                                    Switch(
+                                        checked = includePreviousBalance,
+                                        onCheckedChange = { checked ->
+                                            includePreviousBalance = checked
+                                            if (checked && (manualPreviousBalanceText.isBlank() || manualPreviousBalanceText == "0")) {
+                                                if (customerPastBalancePaise > 0) {
+                                                    manualPreviousBalanceText = if (customerPastBalancePaise % 100 == 0L) (customerPastBalancePaise / 100).toString() else String.format(Locale.ENGLISH, "%.2f", customerPastBalancePaise / 100.0)
+                                                }
                                             }
-                                        }
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color(0xFF191919),
+                                            checkedTrackColor = BillProTheme.colors.accent
+                                        )
+                                    )
+                                }
 
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (!includePreviousBalance) Color.White else Color.Transparent,
-                                            shadowElevation = if (!includePreviousBalance) 1.dp else 0.dp,
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable { includePreviousBalance = false }
-                                        ) {
-                                            Box(
-                                                modifier = Modifier.padding(vertical = 7.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "Exclude (₹0.00)",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = if (!includePreviousBalance) FontWeight.Bold else FontWeight.Medium,
-                                                    color = if (!includePreviousBalance) Color(0xFF191919) else Color(0xFF777777)
-                                                )
+                                // Editable Previous Balance Input Field
+                                OutlinedTextField(
+                                    value = manualPreviousBalanceText,
+                                    onValueChange = { input ->
+                                        if (input.isEmpty() || input.matches(Regex("""^\d*\.?\d*$"""))) {
+                                            manualPreviousBalanceText = input
+                                            isManualBalanceOverridden = true
+                                            val num = input.toDoubleOrNull() ?: 0.0
+                                            if (num > 0 && !includePreviousBalance) {
+                                                includePreviousBalance = true
                                             }
                                         }
+                                    },
+                                    label = { Text("Previous Balance Amount (₹)", fontSize = 12.sp) },
+                                    leadingIcon = {
+                                        Text("₹", color = BillProTheme.colors.textSecondary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    },
+                                    trailingIcon = {
+                                        if (manualPreviousBalanceText.isNotBlank() && manualPreviousBalanceText != "0") {
+                                            IconButton(onClick = {
+                                                manualPreviousBalanceText = "0"
+                                                isManualBalanceOverridden = true
+                                                includePreviousBalance = false
+                                            }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = BillProTheme.colors.accent,
+                                        unfocusedBorderColor = BillProTheme.colors.cardBorder
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // Action chips row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (selectedCustomer != null && customerPastBalancePaise > 0 && isManualBalanceOverridden) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color(0xFFFAF6E5),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, BillProTheme.colors.accent),
+                                            modifier = Modifier.clickable {
+                                                manualPreviousBalanceText = if (customerPastBalancePaise % 100 == 0L) (customerPastBalancePaise / 100).toString() else String.format(Locale.ENGLISH, "%.2f", customerPastBalancePaise / 100.0)
+                                                isManualBalanceOverridden = false
+                                                includePreviousBalance = true
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF191919))
+                                                Text("Reset to System (₹" + String.format(Locale.ENGLISH, "%,.2f", customerPastBalancePaise / 100.0) + ")", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF191919))
+                                            }
+                                        }
+                                    }
+
+                                    if (appliedPreviousBalancePaise > 0) {
+                                        Text(
+                                            text = "Applying +₹" + String.format(Locale.ENGLISH, "%,.2f", appliedPreviousBalancePaise / 100.0) + " to bill",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFE99A28)
+                                        )
                                     }
                                 }
                             }
@@ -1722,7 +1778,6 @@ private fun CreateInvoiceView(
             }
         }
     }
-}
 }
 
 // -----------------------------------------------------------------------------------------
